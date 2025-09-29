@@ -1,0 +1,21 @@
+event:
+  generator:
+    target:
+      url: http://localhost:8080/api/events  # Default local URL
+      batch-size: 100
+      total-events: 500
+      delay-between-batches-ms: 1000
+
+spring:
+  profiles:
+    active: local
+
+---
+spring:
+  config:
+    activate:
+      on-profile: cloud
+event:
+  generator:
+    target:
+      url: ${EVENT_SERVICE_URL}  # Will be set for cloud deployment

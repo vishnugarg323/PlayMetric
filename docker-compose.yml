@@ -1,0 +1,26 @@
+version: '3.8'
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: playmetric-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=playmetric
+    volumes:
+      - mongodb_data:/data/db
+
+  playmetric-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: playmetric-service
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_DATA_MONGODB_URI=mongodb://mongodb:27017/playmetric
+    depends_on:
+      - mongodb
+
+volumes:
+  mongodb_data:
