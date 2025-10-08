@@ -204,6 +204,34 @@ If you want, I can also:
 
 Tell me which follow-up you'd like and I'll implement it next.
 
+## Railway deployment (recommended for ease)
+
+Railway provides an easy way to deploy your service and a managed MongoDB plugin that can be wired into this application with an environment variable.
+
+Steps to deploy on Railway and use Railway's MongoDB:
+
+1. Create a new Railway project and connect your GitHub repository (PlayMetric).
+2. Add the MongoDB plugin from Railway's marketplace — Railway will provision a database and show the connection string in the plugin dashboard.
+3. In your Railway service settings, add an environment variable named `SPRING_DATA_MONGODB_URI` and paste the connection string value Railway provides. Example values look like:
+
+```
+mongodb://username:password@host:port/dbname
+```
+
+or sometimes an SRV/URI form for Atlas-like clusters:
+
+```
+mongodb+srv://username:password@cluster0.xxxxx.mongodb.net/playmetric?retryWrites=true&w=majority
+```
+
+4. Deploy the project in Railway; Railway will build using your `Dockerfile` or use the image you push to Docker Hub. The application reads `SPRING_DATA_MONGODB_URI` (see `application.yml`) and will connect automatically.
+
+Notes and troubleshooting:
+- Local development continues to use the Docker Compose MongoDB at `mongodb://mongodb:27017/playmetric` by default. The `application.yml` prefers `SPRING_DATA_MONGODB_URI` when present.
+- If Railway exposes a different env var name for the Mongo plugin (example: `MONGODB_URL`), copy that value into `SPRING_DATA_MONGODB_URI` in Railway's service environment settings.
+- Verify connection in Railway deploy logs or by checking the running service logs for a successful MongoClient connection.
+
+
 ## One-click / cheap public deployment (recommended)
 
 For a low-cost public deployment where people outside your laptop can hit the API, the simplest path is:
