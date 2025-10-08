@@ -22,66 +22,93 @@ public class GameEventGenerator {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final Random random = new Random();
 
+
     public void generateAndSaveEvents(String filePath, int count, EventType eventType) throws IOException {
-        List<BaseEvent> events = new ArrayList<>();
+        List<Object> events = new ArrayList<>();
         for (int i = 0; i < count; i++) {
             events.add(createEvent(eventType));
         }
         objectMapper.writerWithDefaultPrettyPrinter().writeValue(new File(filePath), events);
     }
 
-    private BaseEvent createEvent(EventType eventType) {
-        switch (eventType) {
-            case GAME_START, GAME_END -> {
-                GameEvent event = new GameEvent();
-                populateBaseFields(event, eventType);
-                event.setSessionId(UUID.randomUUID().toString());
-                event.setPlayingPattern("pattern_" + random.nextInt(5));
-                event.setSessionDuration(random.nextInt(3600));
-                return event;
-            }
-            case LEVEL_START, LEVEL_END, LEVEL_FAILED -> {
-                LevelEvent event = new LevelEvent();
-                populateBaseFields(event, eventType);
-                event.setLevelId(LEVEL_IDS[random.nextInt(LEVEL_IDS.length)]);
-                event.setAttemptCount(random.nextInt(5) + 1);
-                if (eventType == EventType.LEVEL_FAILED) {
-                    event.setFailReason("reason_" + random.nextInt(3));
-                }
-                event.setLevelDuration(random.nextInt(600));
-                event.setCompleted(eventType == EventType.LEVEL_END);
-                return event;
-            }
-            case ECONOMY_TRANSACTION -> {
-                EconomyEvent event = new EconomyEvent();
-                populateBaseFields(event, eventType);
-                event.setTransactionId(UUID.randomUUID().toString());
-                event.setCurrencyType(CURRENCIES[random.nextInt(CURRENCIES.length)]);
-                event.setAmount(random.nextDouble() * 1000);
-                event.setTransactionType(random.nextBoolean() ? "PURCHASE" : "SELL");
-                event.setRealMoneyValue(random.nextDouble() * 100);
-                return event;
-            }
-            default -> {
-                BaseEvent event = new BaseEvent();
-                populateBaseFields(event, eventType);
-                return event;
-            }
-        }
-    }
 
-    private void populateBaseFields(BaseEvent event, EventType eventType) {
-        event.setEventType(eventType);
-        event.setUserId(USER_IDS[random.nextInt(USER_IDS.length)]);
-        event.setTimestamp(Instant.now().minusSeconds(random.nextInt(86400)));
+    private Object createEvent(EventType eventType) {
+        String id = UUID.randomUUID().toString();
+        String userId = USER_IDS[random.nextInt(USER_IDS.length)];
+        DeviceDetails deviceDetails = new DeviceDetails(
+            UUID.randomUUID().toString(),
+            DEVICE_MODELS[random.nextInt(DEVICE_MODELS.length)],
+            random.nextInt(10) + "." + random.nextInt(10),
+            PLATFORMS[random.nextInt(PLATFORMS.length)],
+            "1." + random.nextInt(10) + "." + random.nextInt(10)
+        );
+        Instant timestamp = Instant.now().minusSeconds(random.nextInt(86400));
 
-        DeviceDetails deviceDetails = new DeviceDetails();
-        deviceDetails.setDeviceId(UUID.randomUUID().toString());
-        deviceDetails.setDeviceModel(DEVICE_MODELS[random.nextInt(DEVICE_MODELS.length)]);
-        deviceDetails.setOsVersion(random.nextInt(10) + "." + random.nextInt(10));
-        deviceDetails.setPlatform(PLATFORMS[random.nextInt(PLATFORMS.length)]);
-        deviceDetails.setAppVersion("1." + random.nextInt(10) + "." + random.nextInt(10));
-
-        event.setDeviceDetails(deviceDetails);
+        return switch (eventType) {
+            case GAME_START, GAME_END -> new GameEvent(
+                id,
+                userId,
+                deviceDetails,
+                timestamp,
+                eventType,
+                UUID.randomUUID().toString(),
+                "pattern_" + random.nextInt(5),
+                random.nextInt(3600)
+            );
+            case LEVEL_START, LEVEL_END, LEVEL_FAILED -> new LevelEvent(
+                id,
+                userId,
+                deviceDetails,
+                timestamp,
+                eventType,
+                LEVEL_IDS[random.nextInt(LEVEL_IDS.length)],
+                random.nextInt(5) + 1,
+                eventType == EventType.LEVEL_FAILED ? "reason_" + random.nextInt(3) : null,
+                random.nextInt(600),
+                eventType == EventType.LEVEL_END
+            );
+            case ECONOMY_TRANSACTION -> new EconomyEvent(
+                id,
+                userId,
+                deviceDetails,
+                timestamp,
+                eventType,
+                UUID.randomUUID().toString(),
+                CURRENCIES[random.nextInt(CURRENCIES.length)],
+                random.nextDouble() * 1000,
+                random.nextBoolean() ? "PURCHASE" : "SELL",
+                random.nextDouble() * 100
+            );
+            case MISSION_START, MISSION_END -> new MissionEvent(
+                id,
+                userId,
+                deviceDetails,
+                timestamp,
+                eventType,
+                random.nextBoolean() ? "DAILY" : "MONTHLY",
+                UUID.randomUUID().toString(),
+                eventType == EventType.MISSION_END,
+                random.nextInt(3600)
+            );
+            case AD_LOADED, AD_SHOWN, AD_COMPLETED, AD_CLOSED, AD_REVENUE -> new AdsEvent(
+                id,
+                userId,
+                deviceDetails,
+                timestamp,
+                eventType,
+                eventType.name(),
+                random.nextDouble() * 10,
+                UUID.randomUUID().toString()
+            );
+            case UI_INTERACTION -> new UIInteractionEvent(
+                id,
+                userId,
+                deviceDetails,
+                timestamp,
+                eventType,
+                "CLICK",
+                "Button pressed"
+            );
+        };
     }
 }

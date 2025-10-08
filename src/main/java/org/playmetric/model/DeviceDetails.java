@@ -1,12 +1,10 @@
+
 package org.playmetric.model;
 
-import lombok.Data;
-
-@Data
-public class DeviceDetails {
-    private String deviceId;
-    private String deviceModel;
-    private String osVersion;
-    private String platform;
-    private String appVersion;
-}
+public record DeviceDetails(
+    String deviceId,
+    String deviceModel,
+    String osVersion,
+    String platform,
+    String appVersion
+) {}

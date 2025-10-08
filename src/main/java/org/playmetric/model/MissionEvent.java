@@ -1,15 +1,14 @@
 
 package org.playmetric.model;
 
-public record LevelEvent(
+public record MissionEvent(
     String id,
     String userId,
     DeviceDetails deviceDetails,
     java.time.Instant timestamp,
     EventType eventType,
-    String levelId,
-    int attemptCount,
-    String failReason,
-    long levelDuration,
-    boolean completed
+    String missionType,
+    String missionId,
+    boolean completed,
+    long missionDuration
 ) {}

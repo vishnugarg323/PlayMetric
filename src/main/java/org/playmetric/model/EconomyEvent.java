@@ -1,14 +1,15 @@
+
 package org.playmetric.model;
 
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-
-@Data
-@EqualsAndHashCode(callSuper = true)
-public class EconomyEvent extends BaseEvent {
-    private String transactionId;
-    private String currencyType;
-    private double amount;
-    private String transactionType; // PURCHASE, SELL, REWARD
-    private double realMoneyValue;
-}
+public record EconomyEvent(
+    String id,
+    String userId,
+    DeviceDetails deviceDetails,
+    java.time.Instant timestamp,
+    EventType eventType,
+    String transactionId,
+    String currencyType,
+    double amount,
+    String transactionType,
+    double realMoneyValue
+) {}

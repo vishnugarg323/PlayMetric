@@ -1,15 +1,12 @@
 
 package org.playmetric.model;
 
-public record LevelEvent(
+public record UIInteractionEvent(
     String id,
     String userId,
     DeviceDetails deviceDetails,
     java.time.Instant timestamp,
     EventType eventType,
-    String levelId,
-    int attemptCount,
-    String failReason,
-    long levelDuration,
-    boolean completed
+    String interactionType,
+    String details
 ) {}

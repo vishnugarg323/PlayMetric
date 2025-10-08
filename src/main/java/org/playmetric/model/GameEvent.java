@@ -1,12 +1,13 @@
+
 package org.playmetric.model;
 
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-
-@Data
-@EqualsAndHashCode(callSuper = true)
-public class GameEvent extends BaseEvent {
-    private String sessionId;
-    private String playingPattern;
-    private long sessionDuration;
-}
+public record GameEvent(
+    String id,
+    String userId,
+    DeviceDetails deviceDetails,
+    java.time.Instant timestamp,
+    EventType eventType,
+    String sessionId,
+    String playingPattern,
+    long sessionDuration
+) {}

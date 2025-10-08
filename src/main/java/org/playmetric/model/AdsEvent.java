@@ -1,15 +1,13 @@
 
 package org.playmetric.model;
 
-public record LevelEvent(
+public record AdsEvent(
     String id,
     String userId,
     DeviceDetails deviceDetails,
     java.time.Instant timestamp,
     EventType eventType,
-    String levelId,
-    int attemptCount,
-    String failReason,
-    long levelDuration,
-    boolean completed
+    String adEventType,
+    double revenue,
+    String adId
 ) {}
