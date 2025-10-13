@@ -231,6 +231,13 @@ Notes and troubleshooting:
 - If Railway exposes a different env var name for the Mongo plugin (example: `MONGODB_URL`), copy that value into `SPRING_DATA_MONGODB_URI` in Railway's service environment settings.
 - Verify connection in Railway deploy logs or by checking the running service logs for a successful MongoClient connection.
 
+### Railway-specific troubleshooting and secure secrets
+
+- Do NOT commit your `.env` file with secrets to the repository. Instead use Railway's Environment Variables UI (Project -> Service -> Environment) to set `SPRING_DATA_MONGODB_URI` to the connection string provided by the Mongo plugin.
+- If Railway fails to resolve host `mongodb` in logs ("Name does not resolve"), it means the application is still using the default `mongodb://mongodb:27017/playmetric` value. Confirm Railway has the exact `SPRING_DATA_MONGODB_URI` env var set at the service level (not just the project-level) and redeploy.
+ - For local testing, create a `.env` file from the examples shown in this README or set `SPRING_DATA_MONGODB_URI` in your host environment. Do NOT commit real secrets.
+
+
 
 ## One-click / cheap public deployment (recommended)
 

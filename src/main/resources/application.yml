@@ -1,9 +1,11 @@
 spring:
   data:
     mongodb:
-      uri: ${SPRING_DATA_MONGODB_URI:mongodb://mongodb:27017/playmetric}
-      # If you prefer separate properties locally, the default above points to the docker-compose MongoDB
-      # In production (Railway) set SPRING_DATA_MONGODB_URI to the connection string provided by Railway
+      # WARNING: this file contains hardcoded credentials per your request. These are sensitive values.
+      # The repository now includes the Railway Mongo connection string you provided.
+      # If you want to revert to environment-based configuration, replace this with:
+      # uri: ${SPRING_DATA_MONGODB_URI:mongodb://mongodb:27017/playmetric}
+      uri: "mongodb://mongo:gSFyjoeBNGrWpElewAfFLzloUYmSyqRm@gondola.proxy.rlwy.net:21458/playmetric?authSource=admin"
 
 server:
   port: 8080
@@ -16,4 +18,7 @@ springdoc:
 
 logging:
   level:
-    org.playmetric: INFO
+    org.playmetric: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.data.mongodb: DEBUG
+    com.mongodb: DEBUG

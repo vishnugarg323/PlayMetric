@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <springProfile name="!prod">
+        <property name="LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"/>
+
+        <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>${LOG_PATTERN}</pattern>
+            </encoder>
+        </appender>
+
+        <!-- Increase visibility into framework and driver logs -->
+        <logger name="org.springframework" level="INFO"/>
+        <logger name="org.springframework.web" level="DEBUG"/>
+        <logger name="org.springframework.data.mongodb" level="DEBUG"/>
+        <logger name="com.mongodb" level="DEBUG"/>
+
+        <!-- Application logs: default INFO, TRACE/DEBUG available for troubleshooting -->
+        <logger name="org.playmetric" level="DEBUG"/>
+
+        <root level="INFO">
+            <appender-ref ref="STDOUT"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="prod">
+        <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%d{ISO8601} %-5level %logger - %msg%n</pattern>
+            </encoder>
+        </appender>
+
+        <root level="INFO">
+            <appender-ref ref="STDOUT"/>
+        </root>
+    </springProfile>
+</configuration>
