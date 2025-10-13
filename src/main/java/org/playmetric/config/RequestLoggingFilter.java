@@ -19,6 +19,7 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+        log.info("INCOMING {} {} from={} (RequestLoggingFilter)", request.getMethod(), request.getRequestURI(), request.getRemoteAddr());
         var requestWrapper = new ContentCachingRequestWrapper(request);
         var responseWrapper = new ContentCachingResponseWrapper(response);
         long start = System.currentTimeMillis();
