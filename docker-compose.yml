@@ -1,28 +1,34 @@
-version: '3.8'
 services:
-  mongodb:
-    image: mongo:latest
-    container_name: playmetric-mongodb
-    ports:
-      - "27017:27017"
-    environment:
-      - MONGO_INITDB_DATABASE=playmetric
-    volumes:
-      - mongodb_data:/data/db
-
-  playmetric-service:
+  # Java Backend Service (PlayMetric API)
+  java-api:
     build:
-      context: .
+      context: ./backend-java
       dockerfile: Dockerfile
-    container_name: playmetric-service
+    container_name: playmetric-java-api
     ports:
       - "8080:8080"
-    environment:
-      # Allow overriding the MongoDB connection from the host (e.g. Railway).
-      # If SPRING_DATA_MONGODB_URI is set on the host it will be injected into the container.
-      - SPRING_DATA_MONGODB_URI=${SPRING_DATA_MONGODB_URI:-mongodb://mongodb:27017/playmetric}
-    depends_on:
-      - mongodb
+    networks:
+      - playmetric-network
+    restart: unless-stopped
 
-volumes:
-  mongodb_data:
+  # Python AI Analytics Service (PAIME)
+  python-ai:
+    build:
+      context: ./backend-python
+      dockerfile: Dockerfile
+    container_name: paime-analytics
+    ports:
+      - "8000:8000"  # FastAPI API
+      - "8050:8050"  # Dash Dashboard
+    environment:
+      - MONGODB_URI=mongodb://mongo:gSFyjoeBNGrWpElewAfFLzloUYmSyqRm@gondola.proxy.rlwy.net:21458
+      - DATABASE_NAME=playmetric
+    depends_on:
+      - java-api
+    networks:
+      - playmetric-network
+    restart: unless-stopped
+
+networks:
+  playmetric-network:
+    driver: bridge
