@@ -1,287 +1,474 @@
-# PlayMetric — API Reference & Deployment Guide
+# PlayMetric - Game Analytics Platform
 
-This README documents the HTTP API exposed by the PlayMetric microservice, how to test it locally, and recommended steps to deploy it to the cloud (Docker Hub + AWS ECS Fargate, Azure App Service for Containers, and Google Cloud Run).
+[![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.java.net/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.0-brightgreen.svg)](https://spring.io/projects/spring-boot)
+[![MongoDB](https://img.shields.io/badge/MongoDB-7.0-green.svg)](https://www.mongodb.com/)
 
-## Quick status
-- Service base URL (local Docker): http://localhost:8080
-- OpenAPI (JSON): `/api-docs` — http://localhost:8080/api-docs
-- Swagger UI: `/swagger-ui.html` — http://localhost:8080/swagger-ui.html
+A comprehensive game analytics platform designed to track, analyze, and provide insights into game events for AI-driven analysis. Built with Spring Boot 3.5.0 and Java 21, optimized for Unity game integration and AI/ML analytics.
 
-## Endpoints
+## 🎯 Overview
 
-Base path: `/api/events`
+PlayMetric is a production-ready game analytics API that provides:
 
-1) Record an event (generic)
-   - Method: POST
-   - URL: `/api/events`
-   - Body: JSON representing one of the supported event types. The controller accepts different event record types (for example `GameEvent`, `LevelEvent`, `EconomyEvent`, `MissionEvent`, `AdsEvent`, `UIInteractionEvent`).
-   - Success: 200 OK with stored document
+- **Unified Event Tracking**: Single POST endpoint for all event types
+- **Automatic User Management**: User profiles created and updated automatically
+- **AI-Ready Data Structure**: Optimized for machine learning and data analysis
+- **Comprehensive Event Types**: 100+ predefined event types covering all game scenarios
+- **Rich Analytics Endpoints**: RESTful APIs for data retrieval and analysis
+- **Full Documentation**: OpenAPI/Swagger documentation for all endpoints
 
-   Example `GameEvent` payload (minimal):
+## 🚀 Key Features
 
-   ```json
-   {
-     "id": null,
-     "userId": "user-123",
-     "deviceDetails": {
-       "os": "Android",
-       "osVersion": "14",
-       "deviceModel": "Pixel"
-     },
-     "timestamp": "2025-10-08T12:00:00Z",
-     "eventType": "GAME_START",
-     "sessionId": "session-abc",
-     "playingPattern": "casual",
-     "sessionDuration": 120
-   }
-   ```
+### Event Tracking
+- **Single POST Endpoint**: `/api/events` - One endpoint for all event types
+- **Global Parameters**: Consistent user, device, and session tracking across all events
+- **Automatic Routing**: Events automatically routed to appropriate collections
+- **Real-time Processing**: Instant event recording and user profile updates
 
-   Example `LevelEvent` payload (minimal):
+### Event Categories
+1. **Session Events** - Game sessions, pause/resume tracking
+2. **Level Events** - Level progression, completion, difficulty metrics
+3. **Game Events** - Gameplay mechanics, scores, achievements
+4. **Economy Events** - IAP, virtual currency, transactions
+5. **Social Events** - Multiplayer, guilds, sharing
+6. **Achievement Events** - Unlocks, progress, milestones
+7. **Ad Events** - Ad impressions, revenue, engagement
+8. **UI Events** - User interface interactions, navigation
+9. **Performance Events** - Errors, crashes, performance metrics
 
-   ```json
-   {
-     "id": null,
-     "userId": "user-123",
-     "deviceDetails": { "os": "iOS", "osVersion": "18", "deviceModel": "iPhone" },
-     "timestamp": "2025-10-08T12:05:00Z",
-     "eventType": "LEVEL_COMPLETE",
-     "levelId": "level-2",
-     "success": true
-   }
-   ```
+### Analytics Capabilities
+- User retention and churn analysis
+- Level difficulty calibration
+- Monetization optimization
+- Session engagement metrics
+- Cross-platform analytics
+- Cohort analysis
+- Revenue tracking (IAP + Ads)
 
-2) Get game events by user
-   - Method: GET
-   - URL: `/api/events/game/user/{userId}`
-   - Example: `GET /api/events/game/user/user-123`
+## 📋 Requirements
 
-3) Get level events by user
-   - Method: GET
-   - URL: `/api/events/level/user/{userId}`
-   - Example: `GET /api/events/level/user/user-123`
+- **Java**: JDK 21 or higher
+- **Maven**: 3.6+ (for building)
+- **MongoDB**: 4.4+ (for data storage)
+- **Memory**: Minimum 512MB RAM
 
-Note: Additional repository-backed endpoints can be added similarly for economy/mission/ads/ui-interaction events.
+## 🛠️ Installation
 
-## Test locally (manual)
-
-Prerequisites:
-- Docker and Docker Compose installed
-- Service started via `docker-compose up -d` (root of this repo)
-
-1) Verify Swagger/OpenAPI is available
-
+### 1. Clone the Repository
+```bash
+git clone https://github.com/vishnugarg323/PlayMetric.git
+cd PlayMetric
 ```
-# Open these in a browser or use curl
+
+### 2. Configure MongoDB
+Edit `src/main/resources/application.yml`:
+```yaml
+spring:
+  data:
+    mongodb:
+      uri: "mongodb://your-mongodb-host:27017/playmetric"
+```
+
+### 3. Build the Project
+```bash
+mvn clean package
+```
+
+### 4. Run the Application
+```bash
+java -jar target/playmetric-parent-1.0-SNAPSHOT.jar
+```
+
+The application will start on `http://localhost:8080`
+
+## 📚 API Documentation
+
+### Swagger UI
+Access the interactive API documentation at:
+```
 http://localhost:8080/swagger-ui.html
+```
+
+### OpenAPI Spec
+Download the OpenAPI specification at:
+```
 http://localhost:8080/api-docs
 ```
 
-2) Send a POST to record an event (PowerShell / curl examples)
+## 🎮 Unity Integration
 
-PowerShell (Windows):
+### Sending Events from Unity
 
-```powershell
-$body = @'
+```csharp
+using UnityEngine;
+using UnityEngine.Networking;
+using System.Collections;
+using System.Text;
+
+public class PlayMetricClient : MonoBehaviour
 {
-  "id": null,
-  "userId": "tester-1",
-  "deviceDetails": {"os":"Android","osVersion":"14","deviceModel":"Pixel"},
-  "timestamp": "2025-10-08T12:00:00Z",
-  "eventType": "GAME_START",
-  "sessionId": "sess-1",
-  "playingPattern": "casual",
-  "sessionDuration": 42
-}
-'@
+    private const string API_URL = "http://your-server:8080/api/events";
+    private string userId;
+    private string sessionId;
 
-Invoke-RestMethod -Method Post -Uri http://localhost:8080/api/events -Body $body -ContentType 'application/json'
+    void Start()
+    {
+        userId = SystemInfo.deviceUniqueIdentifier;
+        sessionId = System.Guid.NewGuid().ToString();
+        
+        // Send session start event
+        SendSessionStart();
+    }
+
+    // Send a level complete event
+    public void OnLevelComplete(string levelId, int score, int stars)
+    {
+        var eventData = new
+        {
+            globalParams = new
+            {
+                userId = userId,
+                deviceId = SystemInfo.deviceUniqueIdentifier,
+                deviceModel = SystemInfo.deviceModel,
+                osVersion = SystemInfo.operatingSystem,
+                platform = Application.platform.ToString(),
+                appVersion = Application.version,
+                sessionId = sessionId,
+                sessionDuration = (long)(Time.realtimeSinceStartup * 1000)
+            },
+            eventType = "LEVEL_COMPLETE",
+            gameId = "my_awesome_game",
+            levelId = levelId,
+            completed = true,
+            score = score,
+            starsEarned = stars,
+            levelDuration = 120000
+        };
+
+        StartCoroutine(SendEventCoroutine(eventData));
+    }
+
+    // Send economy purchase event
+    public void OnPurchase(string itemId, double price)
+    {
+        var eventData = new
+        {
+            globalParams = GetGlobalParams(),
+            eventType = "ECONOMY_IAP_PURCHASE",
+            transactionId = System.Guid.NewGuid().ToString(),
+            itemId = itemId,
+            realMoneyValue = price,
+            currencyType = "USD"
+        };
+
+        StartCoroutine(SendEventCoroutine(eventData));
+    }
+
+    private object GetGlobalParams()
+    {
+        return new
+        {
+            userId = userId,
+            deviceId = SystemInfo.deviceUniqueIdentifier,
+            deviceModel = SystemInfo.deviceModel,
+            osVersion = SystemInfo.operatingSystem,
+            platform = Application.platform.ToString(),
+            appVersion = Application.version,
+            sessionId = sessionId,
+            sessionDuration = (long)(Time.realtimeSinceStartup * 1000)
+        };
+    }
+
+    private IEnumerator SendEventCoroutine(object eventData)
+    {
+        string jsonData = JsonUtility.ToJson(eventData);
+        byte[] bodyRaw = Encoding.UTF8.GetBytes(jsonData);
+
+        using (UnityWebRequest request = new UnityWebRequest(API_URL, "POST"))
+        {
+            request.uploadHandler = new UploadHandlerRaw(bodyRaw);
+            request.downloadHandler = new DownloadHandlerBuffer();
+            request.SetRequestHeader("Content-Type", "application/json");
+
+            yield return request.SendWebRequest();
+
+            if (request.result == UnityWebRequest.Result.Success)
+            {
+                Debug.Log("Event sent successfully!");
+            }
+            else
+            {
+                Debug.LogError($"Error sending event: {request.error}");
+            }
+        }
+    }
+}
 ```
 
-curl (Linux/macOS/WSL):
+## 📊 API Endpoints
 
+### Event Recording
+
+#### POST /api/events
+Record any type of game event.
+
+**Request Body:**
+```json
+{
+  "globalParams": {
+    "userId": "user_12345",
+    "deviceId": "device_abc",
+    "deviceModel": "iPhone 14 Pro",
+    "osVersion": "iOS 17.1",
+    "platform": "iOS",
+    "appVersion": "1.0.0",
+    "sessionId": "session_xyz",
+    "sessionDuration": 1800000
+  },
+  "eventType": "LEVEL_COMPLETE",
+  "gameId": "adventure_mode",
+  "levelId": "level_1_1",
+  "completed": true,
+  "score": 1500,
+  "starsEarned": 3
+}
+```
+
+### Data Retrieval
+
+#### GET /api/events
+Get all events grouped by type.
+
+#### GET /api/events/users
+Get all users with activity metrics.
+
+#### GET /api/events/users/{userId}
+Get detailed information for a specific user.
+
+#### GET /api/events/users/{userId}/events
+Get all events for a specific user across all types.
+
+#### GET /api/events/game
+Get all game session events.
+
+#### GET /api/events/level
+Get all level progression events.
+
+#### GET /api/events/level/{levelId}
+Get all events for a specific level.
+
+#### GET /api/events/game/{gameId}/levels
+Get all level events for a specific game.
+
+#### GET /api/events/economy
+Get all economy and transaction events.
+
+#### GET /api/events/analytics/summary
+Get high-level analytics summary including:
+- Total users
+- Active users (24h, 7d)
+- Event counts by type
+- Total revenue (IAP + Ads)
+
+## 🗄️ Data Model
+
+### Global Event Parameters
+Every event includes these common parameters:
+- `userId` - Unique user identifier
+- `deviceId` - Device identifier
+- `deviceModel` - Device model (e.g., "iPhone 14 Pro")
+- `osVersion` - OS version (e.g., "iOS 17.1")
+- `platform` - Platform (iOS, Android, Windows, WebGL)
+- `appVersion` - Game version
+- `timestamp` - Event timestamp (UTC)
+- `sessionId` - Current session identifier
+- `sessionDuration` - Session duration in milliseconds
+
+### User Profile
+Automatically maintained user profile with:
+- First seen / last seen timestamps
+- Total events count
+- Total sessions count
+- Current device and platform info
+- App version
+
+### Event Collections
+Events are stored in separate MongoDB collections:
+- `users` - User profiles
+- `game_events` - Game session events
+- `level_events` - Level progression events
+- `economy_events` - Transaction events
+- `mission_events` - Mission/quest events
+- `ads_events` - Advertisement events
+- `ui_interaction_events` - UI events
+
+## 🎯 Event Types Reference
+
+### Session Events
+- `SESSION_START`, `SESSION_END`, `SESSION_TIMEOUT`
+- `SESSION_PAUSE`, `SESSION_RESUME`, `SESSION_INTERRUPT`
+
+### Level Events
+- `LEVEL_START`, `LEVEL_COMPLETE`, `LEVEL_FAIL`, `LEVEL_QUIT`
+- `LEVEL_RESTART`, `LEVEL_UNLOCK`, `LEVEL_CHECKPOINT`, `LEVEL_SKIP`
+
+### Game Events
+- `GAME_START`, `GAME_END`, `GAME_COMPLETE`
+- `GAME_BOSS_DEFEAT`, `GAME_BOSS_FAIL`
+- `GAME_ITEM_COLLECT`, `GAME_ITEM_USE`
+- `GAME_PLAYER_DEATH`, `GAME_PLAYER_RESPAWN`
+- `GAME_SCORE_UPDATE`, `GAME_HIGH_SCORE`
+- `GAME_POWERUP_USE`, `GAME_POWERUP_EXPIRE`
+
+### Economy Events
+- `ECONOMY_CURRENCY_PURCHASE`, `ECONOMY_CURRENCY_SPEND`, `ECONOMY_CURRENCY_EARN`
+- `ECONOMY_IAP_PURCHASE`, `ECONOMY_IAP_FAIL`
+- `ECONOMY_SHOP_VIEW`, `ECONOMY_UPGRADE`, `ECONOMY_UNLOCK`
+
+### Social Events
+- `SOCIAL_INVITE_SENT`, `SOCIAL_INVITE_ACCEPTED`, `SOCIAL_SHARE`
+- `SOCIAL_GUILD_JOIN`, `SOCIAL_GUILD_LEAVE`
+- `SOCIAL_MULTIPLAYER_JOIN`, `SOCIAL_MULTIPLAYER_WIN`, `SOCIAL_MULTIPLAYER_LOSE`
+
+### Achievement Events
+- `ACHIEVEMENT_UNLOCK`, `ACHIEVEMENT_PROGRESS`, `ACHIEVEMENT_LEVEL_UP`
+
+### Ad Events
+- `AD_LOADED`, `AD_SHOWN`, `AD_COMPLETED`, `AD_CLOSED`
+- `AD_CLICK`, `AD_REVENUE`, `AD_LOAD_FAIL`
+- `AD_REWARDED_SHOWN`, `AD_REWARDED_COMPLETE`
+
+### UI Events
+- `UI_BUTTON_CLICK`, `UI_MENU_OPEN`, `UI_MENU_CLOSE`
+- `UI_SETTINGS_OPEN`, `UI_SETTINGS_CHANGE`
+
+### Tutorial Events
+- `TUTORIAL_START`, `TUTORIAL_COMPLETE`, `TUTORIAL_SKIP`
+
+### Performance Events
+- `PERFORMANCE_ERROR`, `PERFORMANCE_CRASH`, `PERFORMANCE_LOW_FPS`
+
+## 🔧 Configuration
+
+### Application Properties
+Configure in `application.yml`:
+
+```yaml
+spring:
+  data:
+    mongodb:
+      uri: "mongodb://localhost:27017/playmetric"
+
+server:
+  port: 8080
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    org.playmetric: DEBUG
+```
+
+## 🐳 Docker Deployment
+
+### Using Docker Compose
+```bash
+docker-compose up -d
+```
+
+The `docker-compose.yml` includes:
+- PlayMetric application
+- MongoDB database
+- Network configuration
+
+## 📈 Analytics & AI Integration
+
+### Data Export for AI/ML
+Events are structured for easy export to:
+- Pandas DataFrames (Python)
+- CSV/JSON for ML pipelines
+- BigQuery, Snowflake, etc.
+
+### Example: Export for Python Analysis
+```python
+import requests
+import pandas as pd
+
+# Get all level events
+response = requests.get('http://localhost:8080/api/events/level')
+level_events = response.json()
+
+# Convert to DataFrame
+df = pd.DataFrame(level_events)
+
+# Analyze level difficulty
+difficulty_analysis = df.groupby('levelId').agg({
+    'completed': 'mean',  # Completion rate
+    'attemptCount': 'mean',  # Average attempts
+    'levelDuration': 'mean'  # Average time
+})
+
+print(difficulty_analysis)
+```
+
+### Use Cases for AI Analysis
+1. **Level Difficulty Prediction** - Predict optimal difficulty curves
+2. **Churn Prediction** - Identify users at risk of churning
+3. **Monetization Optimization** - Optimize IAP placement and pricing
+4. **Player Segmentation** - Cluster users by behavior patterns
+5. **Content Recommendation** - Suggest levels or content
+6. **A/B Testing** - Compare feature variants
+
+## 🧪 Testing
+
+Run tests with:
+```bash
+mvn test
+```
+
+### Example Test Event
 ```bash
 curl -X POST http://localhost:8080/api/events \
-  -H 'Content-Type: application/json' \
-  -d @gameevent.json
+  -H "Content-Type: application/json" \
+  -d '{
+    "globalParams": {
+      "userId": "test_user_1",
+      "deviceId": "test_device",
+      "platform": "iOS",
+      "appVersion": "1.0.0",
+      "sessionId": "test_session"
+    },
+    "eventType": "LEVEL_COMPLETE",
+    "levelId": "level_1",
+    "completed": true,
+    "score": 1000
+  }'
 ```
 
-3) Query events
+## 👥 Authors
 
-```bash
-curl http://localhost:8080/api/events/game/user/tester-1
-```
+- **Vishnu Garg** - [@vishnugarg323](https://github.com/vishnugarg323)
 
-4) Inspect MongoDB directly (Docker)
+## 📞 Support
 
-```powershell
-docker exec -it playmetric-mongodb mongosh
-use playmetric
-show collections
-db.getCollectionNames()
-db.gameEvent.find().pretty()  # collection name depends on repository mapping
-```
+For questions or support:
+- Create an issue on GitHub
+- Documentation: http://localhost:8080/swagger-ui.html
 
-If collection names differ, list all collections and inspect them to find saved documents.
+## 🗺️ Roadmap
 
-## Minimal Java tester (one-off)
-
-You can quickly create and run a tiny Java program that posts events using the JDK HttpClient. Example `ApiTester.java`:
-
-```java
-// Minimal example (requires Java 11+)
-import java.net.http.*;
-import java.net.*;
-import java.time.*;
-import java.nio.file.*;
-
-public class ApiTester {
-  public static void main(String[] args) throws Exception {
-    var client = HttpClient.newHttpClient();
-    var json = Files.readString(Path.of("sample-event.json"));
-    var req = HttpRequest.newBuilder()
-      .uri(URI.create("http://localhost:8080/api/events"))
-      .header("Content-Type", "application/json")
-      .POST(HttpRequest.BodyPublishers.ofString(json))
-      .build();
-    var resp = client.send(req, HttpResponse.BodyHandlers.ofString());
-    System.out.println(resp.statusCode());
-    System.out.println(resp.body());
-  }
-}
-```
-
-Save `sample-event.json` with a payload from above and run via `javac ApiTester.java && java ApiTester`.
-
-## Deploy to cloud — recommended approaches
-
-Below are concise, practical choices. Pick one based on your cloud provider preference.
-
-Prerequisite common steps (for container based deploy):
-1. Build the image locally or via CI: `docker build -t your-username/playmetric:latest .`
-2. Push to a registry (Docker Hub / AWS ECR / GCR / ACR).
-
-### Option A — Docker Hub + AWS ECS (Fargate)
-
-1) Tag and push to Docker Hub:
-
-```powershell
-docker login
-docker build -t <dockerhub-username>/playmetric:latest .
-docker push <dockerhub-username>/playmetric:latest
-```
-
-2) Create an ECS cluster and a Fargate service using the pushed image. Use the AWS Console or `aws cli` with a task definition referencing the image. Ensure the task has the environment variable `SPRING_DATA_MONGODB_URI` pointing to your MongoDB (hosted or Atlas). Open port 8080 in the service's security group.
-
-3) For production, use AWS RDS/Amazon DocumentDB or MongoDB Atlas for managed MongoDB.
-
-### Option B — Azure App Service for Containers
-
-1) Push your image to Azure Container Registry (ACR) or Docker Hub.
-2) Create an App Service (Linux) and choose "Docker Container". Provide image path and set environment variables (SPRING_DATA_MONGODB_URI).
-
-### Option C — Google Cloud Run
-
-1) Tag and push to Google Container Registry or Artifact Registry.
-2) Deploy with `gcloud run deploy --image=gcr.io/PROJECT/playmetric --platform=managed --region=... --allow-unauthenticated` and set environment variables.
-
-## Recommended production considerations
-- Use a managed MongoDB (Atlas, DocumentDB, ACR) instead of containerized local MongoDB.
-- Add readiness/liveness probes.
-- Configure logging (structured JSON) and a metrics endpoint.
-- Secure the API endpoints (authentication, rate limiting).
-- Use a CI pipeline to build, test, tag, and push images (GitHub Actions, GitLab CI, etc.).
-
-## Troubleshooting
-- If Swagger UI doesn't load, check application logs: `docker logs playmetric-service --follow`.
-- If the container fails with `no main manifest attribute`, ensure the Spring Boot Maven plugin is configured and JAR is runnable (the repository already contains this configuration after recent edits).
-- If you see class-file version errors, ensure Docker runtime JDK version matches compilation target.
+- [ ] Real-time dashboards
+- [ ] Advanced analytics endpoints
+- [ ] Machine learning model integration
+- [ ] Multi-tenant support
+- [ ] Data retention policies
+- [ ] Event batching for high-volume scenarios
+- [ ] WebSocket support for real-time updates
 
 ---
 
-If you want, I can also:
-- Create the small `playmetric-api-tester` Maven project inside the repo and run it to post a sample event and verify storage automatically.
-- Produce ready-to-run GitHub Actions workflow to build, test, and push the Docker image to Docker Hub or ECR.
-
-Tell me which follow-up you'd like and I'll implement it next.
-
-## Railway deployment (recommended for ease)
-
-Railway provides an easy way to deploy your service and a managed MongoDB plugin that can be wired into this application with an environment variable.
-
-Steps to deploy on Railway and use Railway's MongoDB:
-
-1. Create a new Railway project and connect your GitHub repository (PlayMetric).
-2. Add the MongoDB plugin from Railway's marketplace — Railway will provision a database and show the connection string in the plugin dashboard.
-3. In your Railway service settings, add an environment variable named `SPRING_DATA_MONGODB_URI` and paste the connection string value Railway provides. Example values look like:
-
-```
-mongodb://username:password@host:port/dbname
-```
-
-or sometimes an SRV/URI form for Atlas-like clusters:
-
-```
-mongodb+srv://username:password@cluster0.xxxxx.mongodb.net/playmetric?retryWrites=true&w=majority
-```
-
-4. Deploy the project in Railway; Railway will build using your `Dockerfile` or use the image you push to Docker Hub. The application reads `SPRING_DATA_MONGODB_URI` (see `application.yml`) and will connect automatically.
-
-Notes and troubleshooting:
-- Local development continues to use the Docker Compose MongoDB at `mongodb://mongodb:27017/playmetric` by default. The `application.yml` prefers `SPRING_DATA_MONGODB_URI` when present.
-- If Railway exposes a different env var name for the Mongo plugin (example: `MONGODB_URL`), copy that value into `SPRING_DATA_MONGODB_URI` in Railway's service environment settings.
-- Verify connection in Railway deploy logs or by checking the running service logs for a successful MongoClient connection.
-
-### Railway-specific troubleshooting and secure secrets
-
-- Do NOT commit your `.env` file with secrets to the repository. Instead use Railway's Environment Variables UI (Project -> Service -> Environment) to set `SPRING_DATA_MONGODB_URI` to the connection string provided by the Mongo plugin.
-- If Railway fails to resolve host `mongodb` in logs ("Name does not resolve"), it means the application is still using the default `mongodb://mongodb:27017/playmetric` value. Confirm Railway has the exact `SPRING_DATA_MONGODB_URI` env var set at the service level (not just the project-level) and redeploy.
- - For local testing, create a `.env` file from the examples shown in this README or set `SPRING_DATA_MONGODB_URI` in your host environment. Do NOT commit real secrets.
-
-
-
-## One-click / cheap public deployment (recommended)
-
-For a low-cost public deployment where people outside your laptop can hit the API, the simplest path is:
-
-1) Managed MongoDB: Create a free-tier cluster on MongoDB Atlas and get the connection string. Example:
-
-```
-mongodb+srv://<user>:<password>@cluster0.xxxxx.mongodb.net/playmetric?retryWrites=true&w=majority
-```
-
-2) Container registry: Push your image to Docker Hub (see CI workflow added in `.github/workflows/docker-publish.yml`).
-
-3) Host the service on Render (free starter tier) or Fly.io / Railway / Google Cloud Run free tier.
-
-Render steps (quick):
-- Create a Render account
-- Create a new "Web Service" and select "Dockerfile"
-- Set the Docker image build context to this repo (Render will build it). If you pushed to Docker Hub you can select the image instead.
-- Set environment variable `SPRING_DATA_MONGODB_URI` to your Atlas URI.
-- Expose port 8080
-
-Optional `render.yaml` manifest (Render will accept this or you can configure via UI):
-
-```yaml
-services:
-  - type: web
-    name: playmetric
-    env: docker
-    plan: starter
-    dockerfilePath: ./Dockerfile
-    envVars:
-      - key: SPRING_DATA_MONGODB_URI
-        value: $SPRING_DATA_MONGODB_URI
-```
-
-After deployment, Render will provide a public URL. Test by calling `POST /api/events` against that URL.
-
-### Quick checklist to make public deployment work
-- Provision MongoDB Atlas and allow the host (Render / Cloud Run) IPs or 0.0.0.0/0 depending on Atlas setup.
-- Set `SPRING_DATA_MONGODB_URI` in the host environment.
-- Ensure any firewalls or security groups allow 8080 inbound to the service (Render handles this for you).
-
-If you want, I can:
-- Create the small Java tester subproject and run it locally to verify event storage now.
-- Add the `render.yaml` file and a short `deploy-to-render.md` with exact UI steps and screenshots (text only).
-
+**Built with ❤️ for game developers and data scientists**

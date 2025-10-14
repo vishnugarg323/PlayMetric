@@ -1,21 +1,49 @@
 package org.playmetric.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.playmetric.model.*;
 import org.playmetric.repository.*;
+import org.playmetric.service.UserService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
-import java.util.List;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
+import java.util.stream.Collectors;
 
-
+/**
+ * Main controller for game event tracking and analytics.
+ * 
+ * <p>This controller provides:
+ * <ul>
+ *   <li>Unified POST endpoint for all event types</li>
+ *   <li>Automatic user creation and tracking</li>
+ *   <li>Event routing to appropriate collections</li>
+ *   <li>Comprehensive GET endpoints for analytics</li>
+ * </ul>
+ * 
+ * <p>The API is designed for:
+ * - Unity game clients to send events
+ * - AI systems to retrieve data for analysis
+ * - Dashboard applications to display analytics
+ */
 @RestController
 @RequestMapping("/api/events")
-@Tag(name = "Event Controller", description = "APIs for game event tracking and analytics")
+@Tag(name = "Game Analytics API", description = "Comprehensive game event tracking and analytics APIs")
 public class EventController {
+    
+    private static final Logger logger = LoggerFactory.getLogger(EventController.class);
+    
+    private final UserService userService;
     private final GameEventRepository gameEventRepository;
     private final LevelEventRepository levelEventRepository;
     private final EconomyEventRepository economyEventRepository;
@@ -24,6 +52,7 @@ public class EventController {
     private final UIInteractionEventRepository uiInteractionEventRepository;
 
     public EventController(
+        UserService userService,
         GameEventRepository gameEventRepository,
         LevelEventRepository levelEventRepository,
         EconomyEventRepository economyEventRepository,
@@ -31,6 +60,7 @@ public class EventController {
         AdsEventRepository adsEventRepository,
         UIInteractionEventRepository uiInteractionEventRepository
     ) {
+        this.userService = userService;
         this.gameEventRepository = gameEventRepository;
         this.levelEventRepository = levelEventRepository;
         this.economyEventRepository = economyEventRepository;
@@ -39,352 +69,610 @@ public class EventController {
         this.uiInteractionEventRepository = uiInteractionEventRepository;
     }
 
-
+    /**
+     * Unified endpoint to record any type of game event.
+     * This is the main endpoint that Unity clients should use.
+     * 
+     * The endpoint:
+     * 1. Extracts global parameters from the payload
+     * 2. Ensures user exists (creates if new, updates if existing)
+     * 3. Routes event to appropriate collection based on eventType
+     * 4. Returns the saved event
+     */
     @PostMapping
     @Operation(
-        summary = "Record any event (generic)",
-        description = "POST a JSON object representing any supported event type (game, level, etc). The service will store the event in the database. Use this if you want to send a custom event payload. For most users, use the type-specific endpoints below. Returns the saved event document.",
-        requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            description = "Event payload as a JSON object. Must match one of the supported event types.",
-            required = true,
-            content = @io.swagger.v3.oas.annotations.media.Content(
-                mediaType = "application/json",
-                examples = @io.swagger.v3.oas.annotations.media.ExampleObject(
-                    value = "{\n  \"type\": \"game\",\n  \"userId\": \"user123\",\n  \"timestamp\": \"2025-10-13T12:00:00Z\"\n}"
-                )
-            )
-        ),
-        responses = {
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                responseCode = "200",
-                description = "Event saved successfully",
-                content = @io.swagger.v3.oas.annotations.media.Content(
-                    mediaType = "application/json",
-                    examples = @io.swagger.v3.oas.annotations.media.ExampleObject(
-                        value = "{\n  \"id\": \"abc123\",\n  \"type\": \"game\",\n  \"userId\": \"user123\",\n  \"timestamp\": \"2025-10-13T12:00:00Z\"\n}"
-                    )
-                )
-            ),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                responseCode = "400",
-                description = "Invalid event payload"
-            )
-        }
-    )
-    public ResponseEntity<?> recordEvent(@RequestBody java.util.Map<String, Object> payload) {
-        // Generic endpoint: route by a simple `type` field if present
-        var type = payload.getOrDefault("type", payload.get("eventType"));
-        if (type == null) {
-            return ResponseEntity.badRequest().body("Missing 'type' or 'eventType' in payload");
-        }
-        String t = type.toString().toLowerCase();
-        try {
-            switch (t) {
-                case "game":
-                case "game_start":
-                case "gameevent":
-                    var ge = new org.playmetric.model.GameEvent(
-                        (String) payload.get("id"),
-                        (String) payload.get("userId"),
-                        mapToDeviceDetails((java.util.Map<String, Object>) payload.get("deviceDetails")),
-                        payload.get("timestamp") == null ? java.time.Instant.now() : java.time.Instant.parse(payload.get("timestamp").toString()),
-                        org.playmetric.model.EventType.valueOf(payload.getOrDefault("eventType", "GAME_START").toString()),
-                        (String) payload.get("sessionId"),
-                        (String) payload.get("playingPattern"),
-                        payload.get("sessionDuration") == null ? 0L : Long.parseLong(payload.get("sessionDuration").toString())
-                    );
-                    return ResponseEntity.ok(gameEventRepository.save(ge));
-                case "level":
-                case "levelevent":
-                    var le = new org.playmetric.model.LevelEvent(
-                        (String) payload.get("id"),
-                        (String) payload.get("userId"),
-                        mapToDeviceDetails((java.util.Map<String, Object>) payload.get("deviceDetails")),
-                        payload.get("timestamp") == null ? java.time.Instant.now() : java.time.Instant.parse(payload.get("timestamp").toString()),
-                        org.playmetric.model.EventType.valueOf(payload.getOrDefault("eventType", "LEVEL_COMPLETE").toString()),
-                        (String) payload.get("levelId"),
-                        payload.get("attemptCount") == null ? 0 : Integer.parseInt(payload.get("attemptCount").toString()),
-                        (String) payload.get("failReason"),
-                        payload.get("levelDuration") == null ? 0L : Long.parseLong(payload.get("levelDuration").toString()),
-                        payload.get("completed") == null ? false : Boolean.parseBoolean(payload.get("completed").toString())
-                    );
-                    return ResponseEntity.ok(levelEventRepository.save(le));
-                default:
-                    return ResponseEntity.badRequest().body("Unsupported event type: " + type);
+        summary = "Record a game event (Unified Endpoint)",
+        description = """
+            **Main endpoint for recording any game event.**
+            
+            Send a JSON payload containing:
+            - `globalParams`: Common parameters (userId, deviceId, timestamp, sessionId, etc.)
+            - `eventType`: Type of event (e.g., LEVEL_COMPLETE, GAME_START, ECONOMY_PURCHASE)
+            - Event-specific data (e.g., levelId for level events, amount for economy events)
+            
+            The system will:
+            1. Automatically create/update the user
+            2. Route the event to the appropriate collection
+            3. Return the saved event with generated ID
+            
+            **Example for Level Complete:**
+            ```json
+            {
+              "globalParams": {
+                "userId": "user_12345",
+                "deviceId": "device_abc",
+                "deviceModel": "iPhone 14 Pro",
+                "osVersion": "iOS 17.1",
+                "platform": "iOS",
+                "appVersion": "1.0.0",
+                "timestamp": "2025-10-14T12:00:00Z",
+                "sessionId": "session_xyz",
+                "sessionDuration": 1800000
+              },
+              "eventType": "LEVEL_COMPLETE",
+              "gameId": "adventure_mode",
+              "levelId": "level_1_1",
+              "levelNumber": 1,
+              "completed": true,
+              "levelDuration": 120000,
+              "score": 1500,
+              "starsEarned": 3
             }
-        } catch (Exception ex) {
-            return ResponseEntity.status(500).body(ex.getMessage());
-        }
-    }
-
-    private org.playmetric.model.DeviceDetails mapToDeviceDetails(java.util.Map<String, Object> m) {
-        if (m == null) return null;
-        // DeviceDetails record expects: deviceId, deviceModel, osVersion, platform, appVersion
-        String deviceId = m.getOrDefault("deviceId", m.getOrDefault("id", null)) == null ? null : m.getOrDefault("deviceId", m.getOrDefault("id", null)).toString();
-        String deviceModel = m.getOrDefault("deviceModel", m.getOrDefault("model", null)) == null ? null : m.getOrDefault("deviceModel", m.getOrDefault("model", null)).toString();
-        String osVersion = m.getOrDefault("osVersion", m.getOrDefault("version", null)) == null ? null : m.getOrDefault("osVersion", m.getOrDefault("version", null)).toString();
-        String platform = m.getOrDefault("os", null) == null ? null : m.get("os").toString();
-        String appVersion = m.getOrDefault("appVersion", null) == null ? null : m.get("appVersion").toString();
-        return new org.playmetric.model.DeviceDetails(deviceId, deviceModel, osVersion, platform, appVersion);
-    }
-
-    // Type-specific POST endpoints (preferred)
-    @PostMapping("/game")
-    @Operation(
-        summary = "Record a Game Event",
-        description = "POST a GameEvent (e.g., game start, session, etc). Stores the event for analytics. Returns the saved event. Use this to track when a user starts or finishes a game session.",
+            ```
+            """,
         requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            description = "GameEvent payload as JSON.",
+            description = "Event payload with global parameters and event-specific data",
             required = true,
-            content = @io.swagger.v3.oas.annotations.media.Content(
+            content = @Content(
                 mediaType = "application/json",
-                examples = @io.swagger.v3.oas.annotations.media.ExampleObject(
-                    value = "{\n  \"userId\": \"user123\",\n  \"gameId\": \"game456\",\n  \"timestamp\": \"2025-10-13T12:00:00Z\"\n}"
-                )
+                schema = @Schema(implementation = Map.class),
+                examples = {
+                    @ExampleObject(
+                        name = "Level Complete Event",
+                        value = """
+                            {
+                              "globalParams": {
+                                "userId": "user_12345",
+                                "deviceId": "device_abc",
+                                "deviceModel": "iPhone 14 Pro",
+                                "osVersion": "iOS 17.1",
+                                "platform": "iOS",
+                                "appVersion": "1.0.0",
+                                "sessionId": "session_xyz",
+                                "sessionDuration": 1800000
+                              },
+                              "eventType": "LEVEL_COMPLETE",
+                              "gameId": "adventure_mode",
+                              "levelId": "level_1_1",
+                              "completed": true,
+                              "score": 1500
+                            }
+                            """
+                    ),
+                    @ExampleObject(
+                        name = "Game Start Event",
+                        value = """
+                            {
+                              "globalParams": {
+                                "userId": "user_12345",
+                                "deviceId": "device_abc",
+                                "platform": "iOS",
+                                "appVersion": "1.0.0",
+                                "sessionId": "session_xyz"
+                              },
+                              "eventType": "SESSION_START",
+                              "gameId": "adventure_mode"
+                            }
+                            """
+                    ),
+                    @ExampleObject(
+                        name = "Economy Purchase Event",
+                        value = """
+                            {
+                              "globalParams": {
+                                "userId": "user_12345",
+                                "platform": "Android",
+                                "appVersion": "1.0.0",
+                                "sessionId": "session_abc"
+                              },
+                              "eventType": "ECONOMY_IAP_PURCHASE",
+                              "transactionId": "txn_12345",
+                              "currencyType": "gold_coins",
+                              "amount": 1000,
+                              "realMoneyValue": 4.99
+                            }
+                            """
+                    )
+                }
             )
         ),
         responses = {
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            @ApiResponse(
                 responseCode = "200",
-                description = "Game event saved successfully"
+                description = "Event successfully recorded",
+                content = @Content(schema = @Schema(implementation = Map.class))
             ),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            @ApiResponse(
                 responseCode = "400",
-                description = "Invalid GameEvent payload"
-            )
-        }
-    )
-    public ResponseEntity<org.playmetric.model.GameEvent> postGameEvent(@RequestBody org.playmetric.model.GameEvent ge) {
-        return ResponseEntity.ok(gameEventRepository.save(ge));
-    }
-
-    @PostMapping("/level")
-    @Operation(
-        summary = "Record a Level Event",
-        description = "POST a LevelEvent (e.g., level complete, fail, etc). Stores the event for analytics. Returns the saved event. Use this to track user progress or completion of game levels.",
-        requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            description = "LevelEvent payload as JSON.",
-            required = true,
-            content = @io.swagger.v3.oas.annotations.media.Content(
-                mediaType = "application/json",
-                examples = @io.swagger.v3.oas.annotations.media.ExampleObject(
-                    value = "{\n  \"userId\": \"user123\",\n  \"levelId\": \"level789\",\n  \"timestamp\": \"2025-10-13T12:00:00Z\",\n  \"result\": \"completed\"\n}"
-                )
-            )
-        ),
-        responses = {
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                responseCode = "200",
-                description = "Level event saved successfully"
+                description = "Invalid event payload or missing required fields"
             ),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                responseCode = "400",
-                description = "Invalid LevelEvent payload"
+            @ApiResponse(
+                responseCode = "500",
+                description = "Internal server error"
             )
         }
     )
-    public ResponseEntity<org.playmetric.model.LevelEvent> postLevelEvent(@RequestBody org.playmetric.model.LevelEvent le) {
-        return ResponseEntity.ok(levelEventRepository.save(le));
-    }
+    public ResponseEntity<?> recordEvent(@RequestBody Map<String, Object> payload) {
+        try {
+            // Extract and validate global parameters
+            @SuppressWarnings("unchecked")
+            Map<String, Object> globalParamsMap = (Map<String, Object>) payload.get("globalParams");
+            if (globalParamsMap == null) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "error", "Missing required field: globalParams"
+                ));
+            }
 
-    // Example: Get all game events for a user
-    @GetMapping("/game/user/{userId}")
-    @Operation(
-        summary = "Get all game events for a user",
-        description = "Returns a list of all game events (e.g., sessions, starts, ends) for the specified user. Use this to see a user's game activity history.",
-        parameters = {
-            @io.swagger.v3.oas.annotations.Parameter(
-                name = "userId",
-                description = "Unique identifier for the user",
-                required = true,
-                example = "user123"
-            )
-        },
-        responses = {
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                responseCode = "200",
-                description = "List of game events for the user"
-            ),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                responseCode = "404",
-                description = "User not found or no events"
-            )
+            GlobalEventParameters globalParams = extractGlobalParams(globalParamsMap);
+            
+            // Ensure user exists (create or update)
+            userService.ensureUserExists(globalParams);
+            
+            // Extract event type
+            String eventTypeStr = (String) payload.get("eventType");
+            if (eventTypeStr == null) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "error", "Missing required field: eventType"
+                ));
+            }
+
+            EventType eventType;
+            try {
+                eventType = EventType.valueOf(eventTypeStr);
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "error", "Invalid eventType: " + eventTypeStr,
+                    "validTypes", Arrays.stream(EventType.values())
+                        .map(Enum::name)
+                        .collect(Collectors.toList())
+                ));
+            }
+
+            // Route to appropriate handler based on event type
+            Object savedEvent = routeEvent(eventType, globalParams, payload);
+            
+            logger.info("Event recorded: type={}, userId={}, eventId={}", 
+                eventType, globalParams.userId(), 
+                savedEvent instanceof GameEvent ? ((GameEvent) savedEvent).id() : "N/A");
+            
+            return ResponseEntity.ok(savedEvent);
+            
+        } catch (Exception e) {
+            logger.error("Error recording event", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                "error", "Failed to record event: " + e.getMessage()
+            ));
         }
-    )
-    public ResponseEntity<List<GameEvent>> getGameEventsByUser(@PathVariable String userId) {
-        return ResponseEntity.ok(gameEventRepository.findAll().stream().filter(e -> e.userId().equals(userId)).toList());
     }
 
-    // Example: Get all level events for a user
-    @GetMapping("/level/user/{userId}")
-    @Operation(
-        summary = "Get all level events for a user",
-        description = "Returns a list of all level events (e.g., level completions, failures) for the specified user. Use this to see which levels a user has played and their outcomes.",
-        parameters = {
-            @io.swagger.v3.oas.annotations.Parameter(
-                name = "userId",
-                description = "Unique identifier for the user",
-                required = true,
-                example = "user123"
-            )
-        },
-        responses = {
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                responseCode = "200",
-                description = "List of level events for the user"
-            ),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                responseCode = "404",
-                description = "User not found or no events"
-            )
+    /**
+     * Routes event to appropriate repository based on event type.
+     */
+    private Object routeEvent(EventType eventType, GlobalEventParameters globalParams, Map<String, Object> payload) {
+        // Determine category from event type
+        String eventName = eventType.name();
+        
+        if (eventName.startsWith("LEVEL_")) {
+            return saveLevelEvent(eventType, globalParams, payload);
+        } else if (eventName.startsWith("SESSION_") || eventName.startsWith("GAME_")) {
+            return saveGameEvent(eventType, globalParams, payload);
+        } else if (eventName.startsWith("ECONOMY_")) {
+            return saveEconomyEvent(eventType, globalParams, payload);
+        } else if (eventName.startsWith("MISSION_")) {
+            return saveMissionEvent(eventType, globalParams, payload);
+        } else if (eventName.startsWith("AD_")) {
+            return saveAdsEvent(eventType, globalParams, payload);
+        } else if (eventName.startsWith("UI_") || eventName.startsWith("TUTORIAL_")) {
+            return saveUIInteractionEvent(eventType, globalParams, payload);
+        } else {
+            // Default to game event for unclassified events
+            return saveGameEvent(eventType, globalParams, payload);
         }
-    )
-    public ResponseEntity<List<LevelEvent>> getLevelEventsByUser(@PathVariable String userId) {
-        return ResponseEntity.ok(levelEventRepository.findAll().stream().filter(e -> e.userId().equals(userId)).toList());
     }
 
-    // Get all events grouped by type
+    private GameEvent saveGameEvent(EventType eventType, GlobalEventParameters globalParams, Map<String, Object> payload) {
+        GameEvent event = new GameEvent(
+            null, // MongoDB will auto-generate
+            globalParams,
+            eventType,
+            getString(payload, "gameId"),
+            getLong(payload, "score"),
+            getLong(payload, "highScore"),
+            getInteger(payload, "livesRemaining"),
+            getInteger(payload, "healthRemaining"),
+            getInteger(payload, "powerupsUsed"),
+            getInteger(payload, "enemiesDefeated"),
+            getInteger(payload, "bossesDefeated"),
+            getString(payload, "playingPattern"),
+            getString(payload, "additionalData")
+        );
+        return gameEventRepository.save(event);
+    }
+
+    private LevelEvent saveLevelEvent(EventType eventType, GlobalEventParameters globalParams, Map<String, Object> payload) {
+        LevelEvent event = new LevelEvent(
+            null,
+            globalParams,
+            eventType,
+            getString(payload, "gameId"),
+            getString(payload, "levelId"),
+            getInteger(payload, "levelNumber"),
+            getString(payload, "difficulty"),
+            getInteger(payload, "attemptCount"),
+            getBoolean(payload, "completed"),
+            getLong(payload, "levelDuration"),
+            getLong(payload, "score"),
+            getInteger(payload, "starsEarned"),
+            getBoolean(payload, "perfectCompletion"),
+            getString(payload, "failReason"),
+            getString(payload, "checkpointReached"),
+            getInteger(payload, "hintsUsed"),
+            getInteger(payload, "skipsUsed"),
+            getInteger(payload, "itemsCollected"),
+            getInteger(payload, "enemiesDefeated"),
+            getInteger(payload, "damagesTaken"),
+            getInteger(payload, "powerupsUsed"),
+            getString(payload, "additionalData")
+        );
+        return levelEventRepository.save(event);
+    }
+
+    private EconomyEvent saveEconomyEvent(EventType eventType, GlobalEventParameters globalParams, Map<String, Object> payload) {
+        EconomyEvent event = new EconomyEvent(
+            null,
+            globalParams,
+            eventType,
+            getString(payload, "transactionId"),
+            getString(payload, "currencyType"),
+            getDouble(payload, "amount"),
+            getString(payload, "transactionType"),
+            getDouble(payload, "realMoneyValue"),
+            getString(payload, "itemId"),
+            getString(payload, "itemName"),
+            getString(payload, "itemCategory"),
+            getDouble(payload, "balanceBefore"),
+            getDouble(payload, "balanceAfter"),
+            getString(payload, "source"),
+            getString(payload, "additionalData")
+        );
+        return economyEventRepository.save(event);
+    }
+
+    private MissionEvent saveMissionEvent(EventType eventType, GlobalEventParameters globalParams, Map<String, Object> payload) {
+        MissionEvent event = new MissionEvent(
+            null,
+            globalParams,
+            eventType,
+            getString(payload, "missionType"),
+            getString(payload, "missionId"),
+            getString(payload, "missionName"),
+            getBoolean(payload, "completed"),
+            getLong(payload, "missionDuration"),
+            getInteger(payload, "progressPercentage"),
+            getInteger(payload, "attemptCount"),
+            getString(payload, "rewardType"),
+            getDouble(payload, "rewardAmount"),
+            getBoolean(payload, "rewardClaimed"),
+            getString(payload, "additionalData")
+        );
+        return missionEventRepository.save(event);
+    }
+
+    private AdsEvent saveAdsEvent(EventType eventType, GlobalEventParameters globalParams, Map<String, Object> payload) {
+        AdsEvent event = new AdsEvent(
+            null,
+            globalParams,
+            eventType,
+            getString(payload, "adEventType"),
+            getDouble(payload, "revenue"),
+            getString(payload, "adId"),
+            getString(payload, "adNetwork"),
+            getString(payload, "adPlacement"),
+            getString(payload, "adFormat"),
+            getLong(payload, "adDuration"),
+            getBoolean(payload, "skipped"),
+            getBoolean(payload, "clicked"),
+            getString(payload, "rewardType"),
+            getDouble(payload, "rewardAmount"),
+            getString(payload, "additionalData")
+        );
+        return adsEventRepository.save(event);
+    }
+
+    private UIInteractionEvent saveUIInteractionEvent(EventType eventType, GlobalEventParameters globalParams, Map<String, Object> payload) {
+        UIInteractionEvent event = new UIInteractionEvent(
+            null,
+            globalParams,
+            eventType,
+            getString(payload, "interactionType"),
+            getString(payload, "screenName"),
+            getString(payload, "elementId"),
+            getString(payload, "elementName"),
+            getString(payload, "elementType"),
+            getString(payload, "previousScreen"),
+            getString(payload, "details"),
+            getString(payload, "additionalData")
+        );
+        return uiInteractionEventRepository.save(event);
+    }
+
+    // Helper methods to safely extract values from payload
+    private GlobalEventParameters extractGlobalParams(Map<String, Object> map) {
+        String timestampStr = (String) map.get("timestamp");
+        Instant timestamp = timestampStr != null ? Instant.parse(timestampStr) : Instant.now();
+        
+        Long sessionDuration = null;
+        Object durationObj = map.get("sessionDuration");
+        if (durationObj != null) {
+            sessionDuration = durationObj instanceof Number ? 
+                ((Number) durationObj).longValue() : Long.parseLong(durationObj.toString());
+        }
+
+        return new GlobalEventParameters(
+            (String) map.get("userId"),
+            (String) map.get("deviceId"),
+            (String) map.get("deviceModel"),
+            (String) map.get("osVersion"),
+            (String) map.get("platform"),
+            (String) map.get("appVersion"),
+            timestamp,
+            (String) map.get("sessionId"),
+            sessionDuration
+        );
+    }
+
+    private String getString(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        return value != null ? value.toString() : null;
+    }
+
+    private Integer getInteger(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        if (value == null) return null;
+        if (value instanceof Number) return ((Number) value).intValue();
+        try {
+            return Integer.parseInt(value.toString());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private Long getLong(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        if (value == null) return null;
+        if (value instanceof Number) return ((Number) value).longValue();
+        try {
+            return Long.parseLong(value.toString());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private Double getDouble(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        if (value == null) return null;
+        if (value instanceof Number) return ((Number) value).doubleValue();
+        try {
+            return Double.parseDouble(value.toString());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private Boolean getBoolean(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        if (value == null) return null;
+        if (value instanceof Boolean) return (Boolean) value;
+        return Boolean.parseBoolean(value.toString());
+    }
+
+    // ==================== GET ENDPOINTS ====================
+
+    /**
+     * Get all events grouped by type.
+     */
     @GetMapping
     @Operation(
         summary = "Get all events grouped by type",
-        description = "Returns all stored events, grouped by type (game, level, economy, mission, ads, UI). Use this to see everything in the database for analytics or debugging.",
-        responses = {
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                responseCode = "200",
-                description = "Map of event type to list of events"
-            )
-        }
+        description = "Returns all stored events organized by event type for comprehensive analytics"
     )
-    public ResponseEntity<java.util.Map<String, java.util.List<?>>> getAllEvents() {
-        var map = new java.util.LinkedHashMap<String, java.util.List<?>>();
-        map.put("game", gameEventRepository.findAll());
-        map.put("level", levelEventRepository.findAll());
-        map.put("economy", economyEventRepository.findAll());
-        map.put("mission", missionEventRepository.findAll());
-        map.put("ads", adsEventRepository.findAll());
-        map.put("ui", uiInteractionEventRepository.findAll());
-        return ResponseEntity.ok(map);
+    public ResponseEntity<Map<String, Object>> getAllEvents() {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("game_events", gameEventRepository.findAll());
+        response.put("level_events", levelEventRepository.findAll());
+        response.put("economy_events", economyEventRepository.findAll());
+        response.put("mission_events", missionEventRepository.findAll());
+        response.put("ads_events", adsEventRepository.findAll());
+        response.put("ui_interaction_events", uiInteractionEventRepository.findAll());
+        response.put("total_events", 
+            gameEventRepository.count() + 
+            levelEventRepository.count() + 
+            economyEventRepository.count() + 
+            missionEventRepository.count() + 
+            adsEventRepository.count() + 
+            uiInteractionEventRepository.count()
+        );
+        return ResponseEntity.ok(response);
     }
 
-    // Get events by type
-    @GetMapping("/{type}")
+    /**
+     * Get all users.
+     */
+    @GetMapping("/users")
     @Operation(
-        summary = "Get all events of a specific type",
-        description = "Returns all events of the given type (e.g., game, level, economy, mission, ads, UI). Use this to filter events by category.",
-        parameters = {
-            @io.swagger.v3.oas.annotations.Parameter(
-                name = "type",
-                description = "Type of event (game, level, economy, mission, ads, UI)",
-                required = true,
-                example = "game"
-            )
-        },
-        responses = {
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                responseCode = "200",
-                description = "List of events of the specified type"
-            ),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                responseCode = "404",
-                description = "No events of this type found"
-            )
-        }
+        summary = "Get all users",
+        description = "Returns a list of all users with their activity metrics"
     )
-    public ResponseEntity<?> getEventsByType(@PathVariable String type) {
-        switch (type.toLowerCase()) {
-            case "game":
-                return ResponseEntity.ok(gameEventRepository.findAll());
-            case "level":
-                return ResponseEntity.ok(levelEventRepository.findAll());
-            case "economy":
-                return ResponseEntity.ok(economyEventRepository.findAll());
-            case "mission":
-                return ResponseEntity.ok(missionEventRepository.findAll());
-            case "ads":
-                return ResponseEntity.ok(adsEventRepository.findAll());
-            case "ui":
-                return ResponseEntity.ok(uiInteractionEventRepository.findAll());
-            default:
-                return ResponseEntity.badRequest().body("Unknown type: " + type);
-        }
+    public ResponseEntity<List<User>> getAllUsers() {
+        return ResponseEntity.ok(userService.getAllUsers());
     }
 
-    // Level-specific query: events for a given levelId
-    @GetMapping("/level/id/{levelId}")
+    /**
+     * Get user by ID.
+     */
+    @GetMapping("/users/{userId}")
     @Operation(
-        summary = "Get all level events for a specific level",
-        description = "Returns all events for the given level ID. Use this to see how users performed on a specific level.",
-        parameters = {
-            @io.swagger.v3.oas.annotations.Parameter(
-                name = "levelId",
-                description = "Unique identifier for the level",
-                required = true,
-                example = "level789"
-            )
-        },
-        responses = {
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                responseCode = "200",
-                description = "List of level events for the level"
-            ),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                responseCode = "404",
-                description = "No events for this level found"
-            )
-        }
+        summary = "Get user by ID",
+        description = "Returns detailed information about a specific user"
     )
-    public ResponseEntity<java.util.List<org.playmetric.model.LevelEvent>> getLevelEventsByLevelId(@PathVariable String levelId) {
-        return ResponseEntity.ok(levelEventRepository.findAll().stream().filter(e -> levelId.equals(e.levelId())).toList());
+    public ResponseEntity<?> getUserById(@PathVariable String userId) {
+        return userService.getUserById(userId)
+            .map(ResponseEntity::ok)
+            .orElse(ResponseEntity.notFound().build());
     }
 
-    // Game-specific query by user (already existed) and generic per-type by user
-    @GetMapping("/{type}/user/{userId}")
+    /**
+     * Get all events for a specific user.
+     */
+    @GetMapping("/users/{userId}/events")
     @Operation(
-        summary = "Get all events of a type for a user",
-        description = "Returns all events of the specified type (game, level, etc) for the given user. Use this to filter a user's activity by event category.",
-        parameters = {
-            @io.swagger.v3.oas.annotations.Parameter(
-                name = "type",
-                description = "Type of event (game, level, economy, mission, ads, UI)",
-                required = true,
-                example = "game"
-            ),
-            @io.swagger.v3.oas.annotations.Parameter(
-                name = "userId",
-                description = "Unique identifier for the user",
-                required = true,
-                example = "user123"
-            )
-        },
-        responses = {
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                responseCode = "200",
-                description = "List of events of the specified type for the user"
-            ),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                responseCode = "404",
-                description = "No events of this type for the user found"
-            )
-        }
+        summary = "Get all events for a user",
+        description = "Returns all events across all types for a specific user"
     )
-    public ResponseEntity<?> getEventsByTypeAndUser(@PathVariable String type, @PathVariable String userId) {
-        switch (type.toLowerCase()) {
-            case "game":
-                return ResponseEntity.ok(gameEventRepository.findAll().stream().filter(e -> userId.equals(e.userId())).toList());
-            case "level":
-                return ResponseEntity.ok(levelEventRepository.findAll().stream().filter(e -> userId.equals(e.userId())).toList());
-            case "economy":
-                return ResponseEntity.ok(economyEventRepository.findAll().stream().filter(e -> userId.equals(e.userId())).toList());
-            case "mission":
-                return ResponseEntity.ok(missionEventRepository.findAll().stream().filter(e -> userId.equals(e.userId())).toList());
-            case "ads":
-                return ResponseEntity.ok(adsEventRepository.findAll().stream().filter(e -> userId.equals(e.userId())).toList());
-            case "ui":
-                return ResponseEntity.ok(uiInteractionEventRepository.findAll().stream().filter(e -> userId.equals(e.userId())).toList());
-            default:
-                return ResponseEntity.badRequest().body("Unknown type: " + type);
-        }
+    public ResponseEntity<Map<String, Object>> getUserEvents(@PathVariable String userId) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("user_id", userId);
+        response.put("game_events", gameEventRepository.findAll().stream()
+            .filter(e -> userId.equals(e.globalParams().userId()))
+            .collect(Collectors.toList()));
+        response.put("level_events", levelEventRepository.findAll().stream()
+            .filter(e -> userId.equals(e.globalParams().userId()))
+            .collect(Collectors.toList()));
+        response.put("economy_events", economyEventRepository.findAll().stream()
+            .filter(e -> userId.equals(e.globalParams().userId()))
+            .collect(Collectors.toList()));
+        response.put("mission_events", missionEventRepository.findAll().stream()
+            .filter(e -> userId.equals(e.globalParams().userId()))
+            .collect(Collectors.toList()));
+        response.put("ads_events", adsEventRepository.findAll().stream()
+            .filter(e -> userId.equals(e.globalParams().userId()))
+            .collect(Collectors.toList()));
+        response.put("ui_interaction_events", uiInteractionEventRepository.findAll().stream()
+            .filter(e -> userId.equals(e.globalParams().userId()))
+            .collect(Collectors.toList()));
+        return ResponseEntity.ok(response);
     }
 
-    // Add similar endpoints for other event types as needed
+    /**
+     * Get all game events.
+     */
+    @GetMapping("/game")
+    @Operation(
+        summary = "Get all game events",
+        description = "Returns all game session and gameplay events"
+    )
+    public ResponseEntity<List<GameEvent>> getAllGameEvents() {
+        return ResponseEntity.ok(gameEventRepository.findAll());
+    }
+
+    /**
+     * Get all level events.
+     */
+    @GetMapping("/level")
+    @Operation(
+        summary = "Get all level events",
+        description = "Returns all level progression events"
+    )
+    public ResponseEntity<List<LevelEvent>> getAllLevelEvents() {
+        return ResponseEntity.ok(levelEventRepository.findAll());
+    }
+
+    /**
+     * Get level events by level ID.
+     */
+    @GetMapping("/level/{levelId}")
+    @Operation(
+        summary = "Get events for a specific level",
+        description = "Returns all events for a particular level across all users"
+    )
+    public ResponseEntity<List<LevelEvent>> getLevelEventsByLevelId(@PathVariable String levelId) {
+        List<LevelEvent> events = levelEventRepository.findAll().stream()
+            .filter(e -> levelId.equals(e.levelId()))
+            .collect(Collectors.toList());
+        return ResponseEntity.ok(events);
+    }
+
+    /**
+     * Get level events by game ID.
+     */
+    @GetMapping("/game/{gameId}/levels")
+    @Operation(
+        summary = "Get all level events for a game",
+        description = "Returns all level events associated with a specific game"
+    )
+    public ResponseEntity<List<LevelEvent>> getLevelEventsByGameId(@PathVariable String gameId) {
+        List<LevelEvent> events = levelEventRepository.findAll().stream()
+            .filter(e -> gameId.equals(e.gameId()))
+            .collect(Collectors.toList());
+        return ResponseEntity.ok(events);
+    }
+
+    /**
+     * Get all economy events.
+     */
+    @GetMapping("/economy")
+    @Operation(
+        summary = "Get all economy events",
+        description = "Returns all in-game economy and transaction events"
+    )
+    public ResponseEntity<List<EconomyEvent>> getAllEconomyEvents() {
+        return ResponseEntity.ok(economyEventRepository.findAll());
+    }
+
+    /**
+     * Get analytics summary.
+     */
+    @GetMapping("/analytics/summary")
+    @Operation(
+        summary = "Get analytics summary",
+        description = "Returns high-level analytics metrics including user counts, event counts, and activity stats"
+    )
+    public ResponseEntity<Map<String, Object>> getAnalyticsSummary() {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        
+        // User metrics
+        long totalUsers = userService.getTotalUserCount();
+        Instant dayAgo = Instant.now().minus(1, ChronoUnit.DAYS);
+        Instant weekAgo = Instant.now().minus(7, ChronoUnit.DAYS);
+        long activeUsersToday = userService.getActiveUsersSince(dayAgo).size();
+        long activeUsersWeek = userService.getActiveUsersSince(weekAgo).size();
+        
+        summary.put("total_users", totalUsers);
+        summary.put("active_users_24h", activeUsersToday);
+        summary.put("active_users_7d", activeUsersWeek);
+        
+        // Event metrics
+        summary.put("total_game_events", gameEventRepository.count());
+        summary.put("total_level_events", levelEventRepository.count());
+        summary.put("total_economy_events", economyEventRepository.count());
+        summary.put("total_mission_events", missionEventRepository.count());
+        summary.put("total_ads_events", adsEventRepository.count());
+        summary.put("total_ui_events", uiInteractionEventRepository.count());
+        
+        // Calculate total revenue from ads
+        double totalAdRevenue = adsEventRepository.findAll().stream()
+            .mapToDouble(e -> e.revenue() != null ? e.revenue() : 0.0)
+            .sum();
+        summary.put("total_ad_revenue", totalAdRevenue);
+        
+        // Calculate total IAP revenue
+        double totalIapRevenue = economyEventRepository.findAll().stream()
+            .filter(e -> e.eventType().name().contains("IAP"))
+            .mapToDouble(e -> e.realMoneyValue() != null ? e.realMoneyValue() : 0.0)
+            .sum();
+        summary.put("total_iap_revenue", totalIapRevenue);
+        summary.put("total_revenue", totalAdRevenue + totalIapRevenue);
+        
+        return ResponseEntity.ok(summary);
+    }
 }
