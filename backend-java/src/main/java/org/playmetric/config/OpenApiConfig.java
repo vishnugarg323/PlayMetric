@@ -15,7 +15,7 @@ public class OpenApiConfig {
             .description("API for tracking and analyzing game events")
             .version("1.0"))
         .addServersItem(new io.swagger.v3.oas.models.servers.Server()
-            .url("https://playmetric-production.up.railway.app")
+            .url("https://backend-java-production-7971.up.railway.app")
             .description("Production Railway HTTPS server"));
     }
 }
