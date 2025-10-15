@@ -1,0 +1,10 @@
+{
+  "services": {
+    "backend-java": {
+      "root": "backend-java"
+    },
+    "backend-python": {
+      "root": "backend-python"
+    }
+  }
+}
