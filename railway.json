@@ -1,10 +1,16 @@
 {
   "services": {
     "backend-java": {
-      "root": "backend-java"
+      "root": "backend-java",
+      "build": {
+        "builder": "docker"
+      }
     },
     "backend-python": {
-      "root": "backend-python"
+      "root": "backend-python",
+      "build": {
+        "builder": "docker"
+      }
     }
   }
 }
