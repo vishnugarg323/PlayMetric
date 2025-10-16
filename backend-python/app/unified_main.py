@@ -20,8 +20,8 @@ from app.models.level_analyzer import LevelAnalyzer
 from app.services.analytics_engine import AnalyticsEngine
 from app.services.game_recommendations import GameRecommendations
 
-# Import dashboard app
-from app.dashboard.dashboard import app as dash_app
+# Import dashboard app (V2 with advanced AI analytics)
+from app.dashboard.dashboard_v2 import app as dash_app
 
 # Initialize ML models and services
 churn_predictor = ChurnPredictor()

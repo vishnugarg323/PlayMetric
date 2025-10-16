@@ -15,12 +15,14 @@ from app.models.churn_predictor import ChurnPredictor
 from app.models.level_analyzer import LevelAnalyzer
 from app.services.analytics_engine import AnalyticsEngine
 from app.services.game_recommendations import GameRecommendations
+from app.services.ai_insights_engine import AIInsightsEngine
 
 # Initialize ML models and services
 churn_predictor = ChurnPredictor()
 level_analyzer = LevelAnalyzer()
 analytics_engine = AnalyticsEngine()
 recommendation_engine = GameRecommendations()
+ai_insights_engine = AIInsightsEngine()
 
 
 @asynccontextmanager
@@ -456,6 +458,70 @@ async def get_user_analysis(user_id: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error analyzing user: {str(e)}")
+
+
+# AI Insights - Comprehensive Analysis
+@app.get("/analytics/ai-insights", tags=["AI Predictions"])
+async def get_ai_insights():
+    """
+    Get comprehensive AI-powered insights
+    
+    Returns:
+    - Player behavior analysis (session patterns, peak hours, lifecycle)
+    - Revenue optimization opportunities
+    - Level balancing recommendations
+    - Engagement predictions
+    - Anomaly detection
+    - ML-based player segmentation
+    - Retention drivers
+    - Monetization patterns
+    - Content recommendations
+    - Risk assessment
+    - Opportunity scores
+    - Executive summary
+    """
+    try:
+        db = get_sync_database()
+        
+        # Fetch all data
+        users = list(db.users.find())
+        game_events = list(db.game_events.find())
+        level_events = list(db.level_events.find())
+        economy_events = list(db.economy_events.find())
+        mission_events = list(db.mission_events.find())
+        ads_events = list(db.ads_events.find())
+        ui_events = list(db.ui_interaction_events.find())
+        
+        all_events = (
+            game_events + level_events + economy_events + 
+            mission_events + ads_events + ui_events
+        )
+        
+        # Get churn predictions
+        churn_results = []
+        for user in users[:100]:  # Analyze top 100 users for performance
+            user_id = user.get('userId')
+            user_events = [e for e in all_events 
+                          if e.get('globalParams', {}).get('userId') == user_id]
+            prediction = churn_predictor.predict_churn_risk(user, user_events[:100])
+            churn_results.append({
+                'user_id': user_id,
+                **prediction
+            })
+        
+        # Generate comprehensive AI insights
+        insights = ai_insights_engine.generate_comprehensive_insights(
+            users,
+            all_events,
+            level_events,
+            economy_events,
+            churn_results
+        )
+        
+        return insights
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating AI insights: {str(e)}")
 
 
 # Data Statistics

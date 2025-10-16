@@ -5,7 +5,7 @@ Aggregates and processes game analytics data
 import pandas as pd
 import numpy as np
 from typing import Dict, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 
 
@@ -32,7 +32,7 @@ class AnalyticsEngine:
     ) -> Dict:
         """Get comprehensive overview of all metrics"""
         
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         
         # Calculate time-based metrics
         dau = self._calculate_dau(users, now)
@@ -119,10 +119,13 @@ class AnalyticsEngine:
     def _parse_date(self, date_str) -> datetime:
         """Parse date string to datetime"""
         if isinstance(date_str, datetime):
+            # Ensure datetime is timezone-aware
+            if date_str.tzinfo is None:
+                return date_str.replace(tzinfo=timezone.utc)
             return date_str
         if isinstance(date_str, str):
             return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-        return datetime.min
+        return datetime.min.replace(tzinfo=timezone.utc)
     
     def _calculate_session_metrics(self, game_events: List[Dict]) -> Dict:
         """Calculate session-related metrics"""
@@ -304,7 +307,7 @@ class AnalyticsEngine:
     
     def get_user_segments(self, users: List[Dict], events: List[Dict]) -> Dict:
         """Segment users by behavior"""
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         
         segments = {
             'whales': [],  # High spenders

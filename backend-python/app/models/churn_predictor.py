@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Tuple
 import pickle
 import os
@@ -60,18 +60,22 @@ class ChurnPredictor:
         Returns:
             Feature vector as numpy array
         """
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         
         # Calculate days since last session
         last_seen = user_data.get('lastSeen', now)
         if isinstance(last_seen, str):
             last_seen = datetime.fromisoformat(last_seen.replace('Z', '+00:00'))
+        elif last_seen.tzinfo is None:
+            last_seen = last_seen.replace(tzinfo=timezone.utc)
         days_since_last = (now - last_seen).days
         
         # Calculate days since registration
         first_seen = user_data.get('firstSeen', now)
         if isinstance(first_seen, str):
             first_seen = datetime.fromisoformat(first_seen.replace('Z', '+00:00'))
+        elif first_seen.tzinfo is None:
+            first_seen = first_seen.replace(tzinfo=timezone.utc)
         days_since_registration = (now - first_seen).days + 1
         
         # Basic metrics
@@ -139,9 +143,11 @@ class ChurnPredictor:
     
     def _parse_timestamp(self, event: Dict) -> datetime:
         """Parse timestamp from event"""
-        timestamp = event.get('globalParams', {}).get('timestamp', datetime.now())
+        timestamp = event.get('globalParams', {}).get('timestamp', datetime.now(timezone.utc))
         if isinstance(timestamp, str):
             timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+        elif timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=timezone.utc)
         return timestamp
     
     def _calculate_activity_score(self, events: List[Dict], now: datetime) -> float:
@@ -229,10 +235,12 @@ class ChurnPredictor:
     
     def _rule_based_prediction(self, user_data: Dict, events_data: List[Dict]) -> Dict:
         """Fallback rule-based churn prediction"""
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         last_seen = user_data.get('lastSeen', now)
         if isinstance(last_seen, str):
             last_seen = datetime.fromisoformat(last_seen.replace('Z', '+00:00'))
+        elif last_seen.tzinfo is None:
+            last_seen = last_seen.replace(tzinfo=timezone.utc)
         
         days_inactive = (now - last_seen).days
         total_sessions = user_data.get('totalSessions', 0)
@@ -342,3 +350,4 @@ class ChurnPredictor:
             self.feature_names = model_data['feature_names']
             return True
         return False
+

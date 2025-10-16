@@ -630,6 +630,23 @@ public class EventController {
     }
 
     /**
+     * Health check endpoint for service handshake.
+     */
+    @GetMapping("/health")
+    @Operation(
+        summary = "Health check endpoint",
+        description = "Simple health check endpoint used for service handshake and monitoring"
+    )
+    public ResponseEntity<Map<String, String>> healthCheck() {
+        Map<String, String> health = new LinkedHashMap<>();
+        health.put("status", "UP");
+        health.put("service", "PlayMetric Event Tracking API");
+        health.put("version", "1.0.0");
+        health.put("timestamp", Instant.now().toString());
+        return ResponseEntity.ok(health);
+    }
+
+    /**
      * Get analytics summary.
      */
     @GetMapping("/analytics/summary")

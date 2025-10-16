@@ -93,12 +93,24 @@ app.layout = dbc.Container([
         ])
     ]),
     
-    # Auto-refresh interval
-    dcc.Interval(
-        id='interval-component',
-        interval=30*1000,  # 30 seconds
-        n_intervals=0
-    ),
+    # Refresh Button
+    dbc.Row([
+        dbc.Col([
+            html.Div([
+                dbc.Button(
+                    [html.I(className="fas fa-sync-alt"), " Refresh Data"],
+                    id='refresh-button',
+                    color='primary',
+                    size='lg',
+                    style={'marginBottom': '20px'}
+                ),
+                html.Span(id='last-refresh-time', style={'marginLeft': '20px', 'color': COLORS['text'], 'opacity': '0.7'})
+            ], style={'textAlign': 'center'})
+        ])
+    ]),
+    
+    # Hidden div to store refresh trigger
+    html.Div(id='refresh-trigger', style={'display': 'none'}),
     
     # Key Metrics Row
     create_section_header("📈 Key Metrics", "📈"),
@@ -182,6 +194,10 @@ app.layout = dbc.Container([
     create_section_header("💡 AI Recommendations", "💡"),
     html.Div(id='ai-recommendations'),
     
+    # Comprehensive AI Insights
+    create_section_header("🤖 Advanced AI Insights", "🤖"),
+    html.Div(id='ai-comprehensive-insights'),
+    
     # Footer
     html.Hr(style={'borderColor': COLORS['grid'], 'marginTop': '40px'}),
     html.P("PAIME - PlayMetric AI Metrics Engine v1.0 | Last updated: " + datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -192,10 +208,21 @@ app.layout = dbc.Container([
 
 # Callbacks
 @callback(
-    Output('key-metrics-row', 'children'),
-    Input('interval-component', 'n_intervals')
+    Output('refresh-trigger', 'children'),
+    Output('last-refresh-time', 'children'),
+    Input('refresh-button', 'n_clicks'),
+    prevent_initial_call=False
 )
-def update_key_metrics(n):
+def trigger_refresh(n_clicks):
+    """Trigger data refresh and update timestamp"""
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    return str(n_clicks or 0), f"Last refreshed: {now}"
+
+@callback(
+    Output('key-metrics-row', 'children'),
+    Input('refresh-trigger', 'children')
+)
+def update_key_metrics(trigger):
     """Update key metrics cards"""
     overview = fetch_api_data('/analytics/overview')
     
@@ -261,9 +288,9 @@ def update_key_metrics(n):
 
 @callback(
     Output('user-activity-chart', 'figure'),
-    Input('interval-component', 'n_intervals')
+    Input('refresh-trigger', 'children')
 )
-def update_user_activity(n):
+def update_user_activity(trigger):
     """Update user activity trend chart"""
     overview = fetch_api_data('/analytics/overview')
     
@@ -296,9 +323,9 @@ def update_user_activity(n):
 
 @callback(
     Output('platform-distribution-chart', 'figure'),
-    Input('interval-component', 'n_intervals')
+    Input('refresh-trigger', 'children')
 )
-def update_platform_distribution(n):
+def update_platform_distribution(trigger):
     """Update platform distribution pie chart"""
     overview = fetch_api_data('/analytics/overview')
     
@@ -331,9 +358,9 @@ def update_platform_distribution(n):
 
 @callback(
     Output('level-difficulty-heatmap', 'figure'),
-    Input('interval-component', 'n_intervals')
+    Input('refresh-trigger', 'children')
 )
-def update_level_difficulty(n):
+def update_level_difficulty(trigger):
     """Update level difficulty heatmap"""
     level_data = fetch_api_data('/analytics/levels')
     
@@ -384,9 +411,9 @@ def update_level_difficulty(n):
 
 @callback(
     Output('level-funnel-chart', 'figure'),
-    Input('interval-component', 'n_intervals')
+    Input('refresh-trigger', 'children')
 )
-def update_level_funnel(n):
+def update_level_funnel(trigger):
     """Update level progression funnel"""
     level_data = fetch_api_data('/analytics/levels')
     
@@ -425,9 +452,9 @@ def update_level_funnel(n):
 
 @callback(
     Output('dropoff-levels-list', 'children'),
-    Input('interval-component', 'n_intervals')
+    Input('refresh-trigger', 'children')
 )
-def update_dropoff_levels(n):
+def update_dropoff_levels(trigger):
     """Update drop-off levels list"""
     level_data = fetch_api_data('/analytics/levels')
     
@@ -462,9 +489,9 @@ def update_dropoff_levels(n):
 
 @callback(
     Output('churn-risk-chart', 'figure'),
-    Input('interval-component', 'n_intervals')
+    Input('refresh-trigger', 'children')
 )
-def update_churn_risk(n):
+def update_churn_risk(trigger):
     """Update churn risk distribution"""
     churn_data = fetch_api_data('/analytics/churn?limit=50')
     
@@ -498,9 +525,9 @@ def update_churn_risk(n):
 
 @callback(
     Output('high-risk-users-list', 'children'),
-    Input('interval-component', 'n_intervals')
+    Input('refresh-trigger', 'children')
 )
-def update_high_risk_users(n):
+def update_high_risk_users(trigger):
     """Update high-risk users list"""
     churn_data = fetch_api_data('/analytics/churn?limit=100')
     
@@ -539,9 +566,9 @@ def update_high_risk_users(n):
 
 @callback(
     Output('ai-recommendations', 'children'),
-    Input('interval-component', 'n_intervals')
+    Input('refresh-trigger', 'children')
 )
-def update_recommendations(n):
+def update_recommendations(trigger):
     """Update AI recommendations"""
     recommendations = fetch_api_data('/analytics/recommendations')
     
@@ -617,5 +644,435 @@ def update_recommendations(n):
     return html.Div(sections) if sections else html.P("No recommendations at this time", className="text-center text-muted")
 
 
+@callback(
+    Output('ai-comprehensive-insights', 'children'),
+    Input('refresh-trigger', 'children')
+)
+def update_ai_insights(trigger):
+    """Update comprehensive AI insights"""
+    insights = fetch_api_data('/analytics/ai-insights')
+    
+    if not insights or 'timestamp' not in insights:
+        return html.Div([
+            dbc.Card([
+                dbc.CardBody([
+                    html.Div([
+                        dbc.Spinner(color="primary"),
+                        html.P("Analyzing data with AI...", className="text-center mt-3")
+                    ], style={'textAlign': 'center', 'padding': '40px'})
+                ])
+            ], style={'backgroundColor': COLORS['card_bg'], 'border': 'none'})
+        ])
+    
+    sections = []
+    
+    # Executive Summary
+    if insights.get('executive_summary'):
+        summary = insights['executive_summary']
+        health_status = summary.get('health_status', 'unknown')
+        
+        status_colors = {
+            'healthy': COLORS['success'],
+            'warning': COLORS['warning'],
+            'critical': COLORS['danger']
+        }
+        status_color = status_colors.get(health_status, COLORS['info'])
+        
+        sections.append(dbc.Card([
+            dbc.CardBody([
+                html.H4([
+                    "📊 Executive Summary",
+                    html.Span(
+                        f" {health_status.upper()}",
+                        style={
+                            'color': status_color,
+                            'marginLeft': '20px',
+                            'fontSize': '1.2rem',
+                            'fontWeight': 'bold'
+                        }
+                    )
+                ]),
+                html.Hr(style={'borderColor': COLORS['grid']}),
+                
+                # Top Priorities
+                html.Div([
+                    html.H6("🎯 Top Priorities", style={'marginTop': '15px'}),
+                    html.Ul([
+                        html.Li(f"{p['priority']}: {p['action']}")
+                        for p in summary.get('top_priorities', [])
+                    ] if summary.get('top_priorities') else [html.Li("All systems operating normally")])
+                ]),
+                
+                # Best Opportunity
+                html.Div([
+                    html.H6("💎 Best Opportunity", style={'marginTop': '15px'}),
+                    html.P(
+                        f"{summary.get('key_metrics', {}).get('best_opportunity', {}).get('area', 'N/A')} "
+                        f"(Score: {summary.get('key_metrics', {}).get('best_opportunity', {}).get('score', 0)})"
+                    ) if summary.get('key_metrics', {}).get('best_opportunity') else html.P("Analyzing...")
+                ]),
+                
+                # Quick Wins
+                html.Div([
+                    html.H6("⚡ Quick Wins", style={'marginTop': '15px'}),
+                    html.Ul([
+                        html.Li(win) for win in summary.get('quick_wins', [])
+                    ] if summary.get('quick_wins') else [html.Li("No quick wins identified yet")])
+                ])
+            ])
+        ], style={'backgroundColor': COLORS['card_bg'], 'border': f'2px solid {status_color}', 'marginBottom': '20px'}))
+    
+    # Player Behavior Analysis
+    if insights.get('player_behavior_analysis'):
+        behavior = insights['player_behavior_analysis']
+        
+        behavior_cards = []
+        
+        # Session Patterns
+        if behavior.get('session_patterns'):
+            session = behavior['session_patterns']
+            dist = session.get('distribution', {})
+            
+            session_types = list(dist.keys())
+            session_counts = [dist[k]['count'] for k in session_types]
+            
+            fig = go.Figure(data=[go.Pie(
+                labels=[k.title() for k in session_types],
+                values=session_counts,
+                hole=0.4,
+                marker=dict(colors=[COLORS['primary'], COLORS['success'], COLORS['warning'], COLORS['info']])
+            )])
+            
+            fig.update_layout(
+                paper_bgcolor=COLORS['card_bg'],
+                plot_bgcolor=COLORS['card_bg'],
+                font=dict(color=COLORS['text']),
+                margin=dict(l=40, r=40, t=40, b=40),
+                height=300
+            )
+            
+            behavior_cards.append(
+                dbc.Col([
+                    dbc.Card([
+                        dbc.CardBody([
+                            html.H6("Session Type Distribution"),
+                            dcc.Graph(figure=fig, config={'displayModeBar': False}),
+                            html.Small(
+                                f"Avg: {session.get('avg_duration_minutes', 0):.1f} min | "
+                                f"Median: {session.get('median_duration_minutes', 0):.1f} min",
+                                className="text-muted"
+                            )
+                        ])
+                    ], style={'backgroundColor': COLORS['card_bg'], 'border': 'none'})
+                ], md=6)
+            )
+        
+        # Peak Hours
+        if behavior.get('peak_activity_hours'):
+            peak = behavior['peak_activity_hours']
+            
+            if peak.get('hourly_distribution'):
+                hours = sorted(peak['hourly_distribution'].keys())
+                counts = [peak['hourly_distribution'][h] for h in hours]
+                
+                fig = go.Figure(data=[go.Bar(
+                    x=[f"{h:02d}:00" for h in hours],
+                    y=counts,
+                    marker_color=COLORS['primary']
+                )])
+                
+                fig.update_layout(
+                    paper_bgcolor=COLORS['card_bg'],
+                    plot_bgcolor=COLORS['card_bg'],
+                    font=dict(color=COLORS['text']),
+                    margin=dict(l=40, r=40, t=40, b=40),
+                    height=300,
+                    xaxis_title="Hour of Day",
+                    yaxis_title="Activity"
+                )
+                
+                behavior_cards.append(
+                    dbc.Col([
+                        dbc.Card([
+                            dbc.CardBody([
+                                html.H6("Peak Activity Hours"),
+                                dcc.Graph(figure=fig, config={'displayModeBar': False}),
+                                html.Small(
+                                    f"Peak: {peak.get('peak_hour', 0):02d}:00 with {peak.get('peak_hour_activity', 0)} events",
+                                    className="text-muted"
+                                )
+                            ])
+                        ], style={'backgroundColor': COLORS['card_bg'], 'border': 'none'})
+                    ], md=6)
+                )
+        
+        # Lifecycle Distribution
+        if behavior.get('lifecycle_distribution'):
+            lifecycle = behavior['lifecycle_distribution']
+            
+            stages = list(lifecycle.keys())
+            counts = [lifecycle[s]['count'] for s in stages]
+            percentages = [lifecycle[s]['percentage'] for s in stages]
+            
+            fig = go.Figure(data=[go.Bar(
+                x=[s.replace('_', ' ').title() for s in stages],
+                y=counts,
+                text=[f"{p:.1f}%" for p in percentages],
+                textposition='auto',
+                marker_color=[COLORS['success'], COLORS['info'], COLORS['primary'], COLORS['warning'], COLORS['danger']]
+            )])
+            
+            fig.update_layout(
+                paper_bgcolor=COLORS['card_bg'],
+                plot_bgcolor=COLORS['card_bg'],
+                font=dict(color=COLORS['text']),
+                margin=dict(l=40, r=40, t=40, b=40),
+                height=300,
+                xaxis_title="Lifecycle Stage",
+                yaxis_title="Users"
+            )
+            
+            behavior_cards.append(
+                dbc.Col([
+                    dbc.Card([
+                        dbc.CardBody([
+                            html.H6("Player Lifecycle Distribution"),
+                            dcc.Graph(figure=fig, config={'displayModeBar': False})
+                        ])
+                    ], style={'backgroundColor': COLORS['card_bg'], 'border': 'none'})
+                ], md=12)
+            )
+        
+        # Key Findings
+        if behavior.get('key_findings'):
+            behavior_cards.append(
+                dbc.Col([
+                    dbc.Card([
+                        dbc.CardBody([
+                            html.H6("🔍 Key Behavior Findings"),
+                            html.Ul([
+                                html.Li(finding, style={'marginBottom': '8px'})
+                                for finding in behavior['key_findings']
+                            ])
+                        ])
+                    ], style={'backgroundColor': COLORS['card_bg'], 'border': f'1px solid {COLORS["info"]}'})
+                ], md=12)
+            )
+        
+        sections.append(html.Div([
+            html.H5("👥 Player Behavior Analysis", style={'color': COLORS['primary'], 'marginBottom': '15px'}),
+            dbc.Row(behavior_cards, className="mb-4")
+        ]))
+    
+    # Revenue Optimization
+    if insights.get('revenue_optimization'):
+        revenue = insights['revenue_optimization']
+        
+        revenue_cards = []
+        
+        # Key Metrics
+        revenue_cards.append(
+            dbc.Col([
+                create_metric_card(
+                    "Conversion Rate",
+                    f"{revenue.get('conversion_rate', 0):.2f}%",
+                    f"{revenue.get('total_payers', 0)} payers",
+                    COLORS['warning']
+                )
+            ], md=3)
+        )
+        
+        revenue_cards.append(
+            dbc.Col([
+                create_metric_card(
+                    "Avg Transaction",
+                    f"${revenue.get('avg_transaction_value', 0):.2f}",
+                    "per purchase",
+                    COLORS['success']
+                )
+            ], md=3)
+        )
+        
+        revenue_cards.append(
+            dbc.Col([
+                create_metric_card(
+                    "Whale Candidates",
+                    str(len(revenue.get('whale_candidates', []))),
+                    "high-potential users",
+                    COLORS['info']
+                )
+            ], md=3)
+        )
+        
+        # Recommendations
+        if revenue.get('recommendations'):
+            revenue_cards.append(
+                dbc.Col([
+                    dbc.Card([
+                        dbc.CardBody([
+                            html.H6("💰 Revenue Recommendations"),
+                            html.Ul([
+                                html.Li(rec, style={'fontSize': '0.9rem', 'marginBottom': '8px'})
+                                for rec in revenue['recommendations']
+                            ])
+                        ])
+                    ], style={'backgroundColor': COLORS['card_bg'], 'border': f'1px solid {COLORS["warning"]}'})
+                ], md=12)
+            )
+        
+        sections.append(html.Div([
+            html.H5("💰 Revenue Optimization", style={'color': COLORS['primary'], 'marginTop': '20px', 'marginBottom': '15px'}),
+            dbc.Row(revenue_cards, className="mb-4")
+        ]))
+    
+    # Engagement Predictions
+    if insights.get('engagement_predictions'):
+        pred = insights['engagement_predictions']
+        
+        trend_icon = '📈' if pred.get('trend_direction') == 'growing' else '📉' if pred.get('trend_direction') == 'declining' else '➡️'
+        trend_color = COLORS['success'] if pred.get('trend_direction') == 'growing' else COLORS['danger'] if pred.get('trend_direction') == 'declining' else COLORS['info']
+        
+        sections.append(html.Div([
+            html.H5("📊 Engagement Predictions", style={'color': COLORS['primary'], 'marginTop': '20px', 'marginBottom': '15px'}),
+            dbc.Row([
+                dbc.Col([
+                    dbc.Card([
+                        dbc.CardBody([
+                            html.H6("7-Day Trend"),
+                            html.Div([
+                                html.H3([
+                                    trend_icon + " ",
+                                    pred.get('trend_direction', 'stable').upper()
+                                ], style={'color': trend_color, 'marginBottom': '10px'}),
+                                html.P(f"{pred.get('trend_percentage', 0):+.1f}% change", 
+                                      style={'fontSize': '1.2rem', 'color': trend_color}),
+                                html.Hr(style={'borderColor': COLORS['grid']}),
+                                html.Small(f"Recent 7 days: {pred.get('recent_7_days_events', 0):,} events", 
+                                          className="text-muted d-block"),
+                                html.Small(f"Previous 7 days: {pred.get('previous_7_days_events', 0):,} events", 
+                                          className="text-muted d-block"),
+                                html.Small(f"Projected next 7 days: {pred.get('projected_next_7_days', 0):,} events", 
+                                          style={'color': COLORS['info']}, className="d-block mt-2"),
+                                html.Small(f"Confidence: {pred.get('confidence', 'medium')}", 
+                                          className="text-muted d-block mt-2")
+                            ])
+                        ])
+                    ], style={'backgroundColor': COLORS['card_bg'], 'border': f'2px solid {trend_color}'})
+                ], md=6)
+            ], className="mb-4")
+        ]))
+    
+    # ML Player Segmentation
+    if insights.get('player_segments_ml') and insights['player_segments_ml'].get('status') == 'success':
+        segments = insights['player_segments_ml']
+        
+        segment_cards = []
+        for seg_id, seg_data in segments.get('segments', {}).items():
+            segment_cards.append(
+                dbc.Col([
+                    dbc.Card([
+                        dbc.CardBody([
+                            html.H6(seg_data['name'], style={'color': COLORS['primary']}),
+                            html.P(f"{seg_data['size']} users", className="text-muted"),
+                            html.Hr(style={'borderColor': COLORS['grid']}),
+                            html.Small(f"Avg Sessions: {seg_data['avg_sessions']:.1f}", className="d-block"),
+                            html.Small(f"Avg Events: {seg_data['avg_events']:.1f}", className="d-block"),
+                            html.Small(f"Avg Spending: ${seg_data['avg_spending']:.2f}", className="d-block"),
+                            html.Small(f"Daily Activity: {seg_data['avg_daily_activity']:.1f}", className="d-block")
+                        ])
+                    ], style={'backgroundColor': COLORS['card_bg'], 'border': '1px solid ' + COLORS['grid']})
+                ], md=3)
+            )
+        
+        sections.append(html.Div([
+            html.H5("🤖 ML-Based Player Segmentation", 
+                   style={'color': COLORS['primary'], 'marginTop': '20px', 'marginBottom': '15px'}),
+            dbc.Row(segment_cards, className="mb-4")
+        ]))
+    
+    # Opportunity Scores
+    if insights.get('opportunity_score'):
+        opp = insights['opportunity_score']
+        
+        opportunities = [
+            {'name': 'Monetization', 'score': opp.get('monetization', 0), 'icon': '💰'},
+            {'name': 'Engagement', 'score': opp.get('engagement', 0), 'icon': '🎮'},
+            {'name': 'Retention', 'score': opp.get('retention', 0), 'icon': '🔄'},
+            {'name': 'Growth', 'score': opp.get('growth', 0), 'icon': '📈'}
+        ]
+        
+        opp_cards = []
+        for opportunity in opportunities:
+            score = opportunity['score']
+            color = COLORS['success'] if score > 70 else COLORS['warning'] if score > 40 else COLORS['danger']
+            
+            opp_cards.append(
+                dbc.Col([
+                    dbc.Card([
+                        dbc.CardBody([
+                            html.Div([
+                                html.Span(opportunity['icon'], style={'fontSize': '2rem'}),
+                                html.H6(opportunity['name'], style={'marginTop': '10px'}),
+                                html.H3(str(score), style={'color': color, 'fontWeight': 'bold'}),
+                                html.Small("Opportunity Score", className="text-muted")
+                            ], style={'textAlign': 'center'})
+                        ])
+                    ], style={'backgroundColor': COLORS['card_bg'], 'border': f'2px solid {color}'})
+                ], md=3)
+            )
+        
+        sections.append(html.Div([
+            html.H5("🎯 Opportunity Scores", 
+                   style={'color': COLORS['primary'], 'marginTop': '20px', 'marginBottom': '15px'}),
+            dbc.Row(opp_cards, className="mb-4")
+        ]))
+    
+    # Anomaly Detection
+    if insights.get('anomaly_detection'):
+        anomaly = insights['anomaly_detection']
+        
+        if anomaly.get('status') == 'clean':
+            sections.append(html.Div([
+                html.H5("🔍 Anomaly Detection", 
+                       style={'color': COLORS['primary'], 'marginTop': '20px', 'marginBottom': '15px'}),
+                dbc.Card([
+                    dbc.CardBody([
+                        html.Div([
+                            html.H3("✅", style={'fontSize': '3rem'}),
+                            html.H5("No Anomalies Detected", style={'color': COLORS['success']}),
+                            html.P("All systems operating normally", className="text-muted")
+                        ], style={'textAlign': 'center', 'padding': '20px'})
+                    ])
+                ], style={'backgroundColor': COLORS['card_bg'], 'border': f'2px solid {COLORS["success"]}', 'marginBottom': '20px'})
+            ]))
+        elif anomaly.get('anomalies'):
+            anomaly_items = []
+            for anom in anomaly['anomalies']:
+                severity_color = COLORS['danger'] if anom['severity'] == 'high' else COLORS['warning']
+                anomaly_items.append(
+                    dbc.ListGroupItem([
+                        html.Div([
+                            html.Span(f"⚠️ {anom['type'].replace('_', ' ').title()}", 
+                                     style={'fontWeight': 'bold', 'color': severity_color}),
+                            html.P(anom['description'], className="mb-1 mt-2"),
+                            html.Small(f"Recommendation: {anom['recommendation']}", className="text-muted")
+                        ])
+                    ], style={'backgroundColor': COLORS['card_bg'], 'border': f'1px solid {severity_color}'})
+                )
+            
+            sections.append(html.Div([
+                html.H5("🔍 Anomaly Detection", 
+                       style={'color': COLORS['primary'], 'marginTop': '20px', 'marginBottom': '15px'}),
+                dbc.ListGroup(anomaly_items, className="mb-4")
+            ]))
+    
+    return html.Div(sections) if sections else html.Div([
+        html.P("AI insights will appear here after sufficient data is collected", 
+               className="text-center text-muted",
+               style={'padding': '40px'})
+    ])
+
+
 if __name__ == '__main__':
     app.run_server(debug=True, host='0.0.0.0', port=8050)
+
